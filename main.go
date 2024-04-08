@@ -11,11 +11,17 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/score-spec/score-go/framework"
-	"github.com/score-spec/score-go/loader"
-	"github.com/score-spec/score-go/schema"
+	scoreloader "github.com/score-spec/score-go/loader"
+	scoreschema "github.com/score-spec/score-go/schema"
 	scoretypes "github.com/score-spec/score-go/types"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+	appsV1 "k8s.io/api/apps/v1"
+	coreV1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+
+	"github.com/score-spec/score-k8s/internal"
 )
 
 var rootCmd = &cobra.Command{
@@ -109,9 +115,9 @@ var generateCmd = &cobra.Command{
 				return errors.Wrapf(err, "failed to read input score file: %s", arg)
 			} else if err = yaml.Unmarshal(raw, &rawWorkload); err != nil {
 				return errors.Wrapf(err, "failed to decode input score file: %s", arg)
-			} else if err = schema.Validate(rawWorkload); err != nil {
+			} else if err = scoreschema.Validate(rawWorkload); err != nil {
 				return errors.Wrapf(err, "invalid score file: %s", arg)
-			} else if err = loader.MapSpec(&workload, rawWorkload); err != nil {
+			} else if err = scoreloader.MapSpec(&workload, rawWorkload); err != nil {
 				return errors.Wrapf(err, "failed to decode input score file: %s", arg)
 			} else if state, err = state.WithWorkload(&workload, &arg, framework.NoExtras{}); err != nil {
 				return errors.Wrapf(err, "failed to add score file to project: %s", arg)
@@ -143,6 +149,12 @@ var generateCmd = &cobra.Command{
 		}
 		slog.Info("Created new manifests directory", "dir", manifestsDirectory)
 
+		scheme := runtime.NewScheme()
+		_ = coreV1.AddToScheme(scheme)
+		_ = appsV1.AddToScheme(scheme)
+		cf := serializer.NewCodecFactory(scheme)
+		info, _ := runtime.SerializerInfoForMediaType(cf.SupportedMediaTypes(), runtime.ContentTypeYAML)
+
 		resIds, err := state.GetSortedResourceUids()
 		if err != nil {
 			return errors.Wrap(err, "failed to determine resource sorting")
@@ -153,6 +165,23 @@ var generateCmd = &cobra.Command{
 
 		for workloadName := range state.Workloads {
 			slog.Info("Skipped generating workload", "workload", workloadName)
+
+			manifests, err := internal.ConvertWorkload(state, workloadName)
+			if err != nil {
+				return errors.Wrapf(err, "workload: %s: failed to convert", workloadName)
+			}
+			out := new(bytes.Buffer)
+			for _, m := range manifests {
+				out.WriteString("---\n")
+				if err = info.Serializer.Encode(m.(runtime.Object), out); err != nil {
+					return errors.Wrapf(err, "workload: %s: failed to serialise manifest %s", workloadName, m.GetName())
+				}
+				out.WriteString("\n")
+			}
+			if err := os.WriteFile(filepath.Join(manifestsDirectory, fmt.Sprintf("workload-%s.yaml", workloadName)), out.Bytes(), 0600); err != nil {
+				return errors.Wrapf(err, "workload: %s: failed to write manifests file", workloadName)
+			}
+			slog.Info("Wrote manifests file for workload", "workload", workloadName)
 		}
 
 		return nil
