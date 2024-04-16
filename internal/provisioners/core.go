@@ -25,6 +25,8 @@ import (
 
 	"github.com/score-spec/score-go/framework"
 	score "github.com/score-spec/score-go/types"
+	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	util "github.com/score-spec/score-k8s/internal"
 	"github.com/score-spec/score-k8s/internal/project"
@@ -159,6 +161,21 @@ func (po *ProvisionOutput) ApplyToStateAndProject(state *project.State, resUid f
 	if out.Extras.Manifests == nil {
 		out.Extras.Manifests = make([]map[string]interface{}, 0)
 	}
+
+	if len(po.Manifests) > 0 {
+
+		// validate the output manifests
+		dec := util.K8sCodecFactory.UniversalDeserializer()
+		for i, rawManifest := range po.Manifests {
+			var m runtime.Object
+			raw, _ := yaml.Marshal(rawManifest)
+			if _, _, err := dec.Decode(raw, nil, m); err != nil {
+				return nil, fmt.Errorf("manifests template output %d was weird: %w", i, err)
+			}
+		}
+
+	}
+
 	out.Extras.Manifests = append(out.Extras.Manifests, po.Manifests...)
 
 	out.Resources[resUid] = existing

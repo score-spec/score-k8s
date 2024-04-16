@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -16,14 +17,13 @@ import (
 	scoretypes "github.com/score-spec/score-go/types"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
-	appsV1 "k8s.io/api/apps/v1"
-	coreV1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 
+	"github.com/score-spec/score-k8s/internal"
 	"github.com/score-spec/score-k8s/internal/convert"
 	"github.com/score-spec/score-k8s/internal/project"
+	"github.com/score-spec/score-k8s/internal/provisioners"
+	"github.com/score-spec/score-k8s/internal/provisioners/loader"
 )
 
 var rootCmd = &cobra.Command{
@@ -127,15 +127,21 @@ var generateCmd = &cobra.Command{
 			slog.Info("Added score file to project", "file", arg)
 		}
 
+		if len(state.Workloads) == 0 {
+			return errors.New("Project is empty, please add a score file")
+		}
+
 		var err error
 		if state, err = state.WithPrimedResources(); err != nil {
 			return errors.Wrap(err, "failed to prime resources")
 		}
-		slog.Info("Primed resources")
+		slog.Info("Primed resources", "#workloads", len(state.Workloads), "#resources", len(state.Resources))
 
-		if len(state.Workloads) == 0 {
-			return errors.New("Project is empty, please add a score file")
+		localProvisioners, err := loader.LoadProvisionersFromDirectory(".", loader.DefaultSuffix)
+		if err != nil {
+			return errors.Wrapf(err, "failed to load provisioners")
 		}
+		slog.Info("Loaded provisioners", "#provisioners", len(localProvisioners))
 
 		if items, err := os.ReadDir(manifestsDirectory); err == nil && len(items) > 0 {
 			manifestsBackup := manifestsDirectory + ".backup." + time.Now().Format("20060102150405")
@@ -154,43 +160,31 @@ var generateCmd = &cobra.Command{
 		}
 		slog.Info("Created new manifests directory", "dir", manifestsDirectory)
 
-		scheme := runtime.NewScheme()
-		_ = coreV1.AddToScheme(scheme)
-		_ = appsV1.AddToScheme(scheme)
-		cf := serializer.NewCodecFactory(scheme)
-		info, _ := runtime.SerializerInfoForMediaType(cf.SupportedMediaTypes(), runtime.ContentTypeYAML)
-
-		resIds, err := state.GetSortedResourceUids()
+		state, err = provisioners.ProvisionResources(context.Background(), state, localProvisioners)
 		if err != nil {
-			return errors.Wrap(err, "failed to determine resource sorting")
+			return errors.Wrapf(err, "failed to provision resources")
 		}
 
-		seenNames := make(map[string]bool)
-		for i := len(resIds) - 1; i >= 0; i-- {
-			resId := resIds[i]
-			var manifests []v1.Object
-			manifests, state, err = convert.ConvertResource(state, resId)
-			if err != nil {
-				return errors.Wrapf(err, "resources: %s: failed to convert", resId)
-			}
-			if len(manifests) > 0 {
-				out := new(bytes.Buffer)
-				for _, m := range manifests {
-					name := fmt.Sprintf("%s/%s", m.(v1.Type).GetKind(), m.GetName())
-					if !seenNames[name] {
-						out.WriteString("---\n")
-						if err = info.Serializer.Encode(m.(runtime.Object), out); err != nil {
-							return errors.Wrapf(err, "resources: %s: failed to serialise manifest %s", resId, m.GetName())
-						}
-						out.WriteString("\n")
-						seenNames[name] = true
-					}
+		info, _ := runtime.SerializerInfoForMediaType(internal.K8sCodecFactory.SupportedMediaTypes(), runtime.ContentTypeYAML)
+
+		if len(state.Extras.Manifests) > 0 {
+			out := new(bytes.Buffer)
+			for _, manifest := range state.Extras.Manifests {
+				out.WriteString("---\n")
+				raw, _ := yaml.Marshal(manifest)
+				obj, _, err := info.Serializer.Decode(raw, nil, nil)
+				if err != nil {
+					return errors.Wrapf(err, "failed to recode")
 				}
-				if err := os.WriteFile(filepath.Join(manifestsDirectory, fmt.Sprintf("resource-%s.yaml", resId)), out.Bytes(), 0600); err != nil {
-					return errors.Wrapf(err, "resources: %s: failed to write manifests file", resId)
+				if err := info.Serializer.Encode(obj, out); err != nil {
+					return errors.Wrapf(err, "failed to write manifest for %s", obj.GetObjectKind())
 				}
-				slog.Info("Wrote manifests file for resource", "resource", resId)
+				out.WriteString("\n")
 			}
+			if err := os.WriteFile(filepath.Join(manifestsDirectory, "resource.yaml"), out.Bytes(), 0600); err != nil {
+				return errors.Wrapf(err, "resources: failed to write manifests file")
+			}
+			slog.Info("Wrote manifests file for resources")
 		}
 
 		for workloadName := range state.Workloads {

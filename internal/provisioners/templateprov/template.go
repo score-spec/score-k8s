@@ -26,9 +26,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/score-spec/score-go/framework"
 	"gopkg.in/yaml.v3"
-	coreV1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	util "github.com/score-spec/score-k8s/internal"
 	"github.com/score-spec/score-k8s/internal/provisioners"
@@ -173,24 +170,10 @@ func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) 
 		return nil, fmt.Errorf("outputs template failed: %w", err)
 	}
 
-	rawManifests := make([]map[string]interface{}, 0)
-	if err := renderTemplateAndDecode(p.ManifestsTemplate, &data, &rawManifests); err != nil {
+	out.Manifests = make([]map[string]interface{}, 0)
+	if err := renderTemplateAndDecode(p.ManifestsTemplate, &data, &out.Manifests); err != nil {
 		return nil, fmt.Errorf("manifests template failed: %w", err)
 	}
-
-	scheme := runtime.NewScheme()
-	_ = coreV1.AddToScheme(scheme)
-	cf := serializer.NewCodecFactory(scheme)
-	dec := cf.UniversalDecoder(coreV1.SchemeGroupVersion)
-	for i, rawManifest := range rawManifests {
-		var m runtime.Object
-		raw, _ := yaml.Marshal(rawManifest)
-		if _, _, err := dec.Decode(raw, nil, m); err != nil {
-			return nil, fmt.Errorf("manifests template output %d was weird: %w", i, err)
-		}
-	}
-
-	out.Manifests = rawManifests
 
 	return out, nil
 }
