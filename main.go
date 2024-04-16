@@ -18,10 +18,12 @@ import (
 	"gopkg.in/yaml.v3"
 	appsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 
-	"github.com/score-spec/score-k8s/internal"
+	"github.com/score-spec/score-k8s/internal/convert"
+	"github.com/score-spec/score-k8s/internal/project"
 )
 
 var rootCmd = &cobra.Command{
@@ -92,14 +94,14 @@ var generateCmd = &cobra.Command{
 		cmd.SilenceUsage = true
 
 		stateFile := filepath.Join(projectDirectory, stateFileName)
-		var state *framework.State[framework.NoExtras, framework.NoExtras]
+		var state *project.State
 
 		if raw, err := os.ReadFile(stateFile); err != nil {
 			return errors.Wrap(err, "failed to read existing state file")
 		} else {
 			enc := yaml.NewDecoder(bytes.NewReader(raw))
 			enc.KnownFields(false)
-			var rawState framework.State[framework.NoExtras, framework.NoExtras]
+			var rawState project.State
 			if err = enc.Decode(&rawState); err != nil {
 				return errors.Wrap(err, "failed to load existing state")
 			}
@@ -135,15 +137,18 @@ var generateCmd = &cobra.Command{
 			return errors.New("Project is empty, please add a score file")
 		}
 
-		manifestsBackup := manifestsDirectory + ".backup." + time.Now().Format("20060102150405")
-		if err := os.Rename(manifestsDirectory, manifestsBackup); err != nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				return errors.Wrap(err, "failed to backup previous manifests")
+		if items, err := os.ReadDir(manifestsDirectory); err == nil && len(items) > 0 {
+			manifestsBackup := manifestsDirectory + ".backup." + time.Now().Format("20060102150405")
+			if err := os.Rename(manifestsDirectory, manifestsBackup); err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					return errors.Wrap(err, "failed to backup previous manifests")
+				}
+				slog.Info("No previous manifests directory to backup")
+			} else {
+				slog.Info("Backed up manifests directory", "dir", manifestsBackup)
 			}
-			slog.Info("No previous manifests directory to backup")
-		} else {
-			slog.Info("Backed up manifests directory", "dir", manifestsBackup)
 		}
+
 		if err := os.MkdirAll(manifestsDirectory, 0700); err != nil {
 			return errors.Wrapf(err, "failed to create output manifests directory")
 		}
@@ -159,29 +164,54 @@ var generateCmd = &cobra.Command{
 		if err != nil {
 			return errors.Wrap(err, "failed to determine resource sorting")
 		}
-		for _, resId := range resIds {
-			slog.Info("Skipped provisioning resource", "resId", resId)
+
+		seenNames := make(map[string]bool)
+		for i := len(resIds) - 1; i >= 0; i-- {
+			resId := resIds[i]
+			var manifests []v1.Object
+			manifests, state, err = convert.ConvertResource(state, resId)
+			if err != nil {
+				return errors.Wrapf(err, "resources: %s: failed to convert", resId)
+			}
+			if len(manifests) > 0 {
+				out := new(bytes.Buffer)
+				for _, m := range manifests {
+					name := fmt.Sprintf("%s/%s", m.(v1.Type).GetKind(), m.GetName())
+					if !seenNames[name] {
+						out.WriteString("---\n")
+						if err = info.Serializer.Encode(m.(runtime.Object), out); err != nil {
+							return errors.Wrapf(err, "resources: %s: failed to serialise manifest %s", resId, m.GetName())
+						}
+						out.WriteString("\n")
+						seenNames[name] = true
+					}
+				}
+				if err := os.WriteFile(filepath.Join(manifestsDirectory, fmt.Sprintf("resource-%s.yaml", resId)), out.Bytes(), 0600); err != nil {
+					return errors.Wrapf(err, "resources: %s: failed to write manifests file", resId)
+				}
+				slog.Info("Wrote manifests file for resource", "resource", resId)
+			}
 		}
 
 		for workloadName := range state.Workloads {
-			slog.Info("Skipped generating workload", "workload", workloadName)
-
-			manifests, err := internal.ConvertWorkload(state, workloadName)
+			manifests, err := convert.ConvertWorkload(state, workloadName)
 			if err != nil {
 				return errors.Wrapf(err, "workload: %s: failed to convert", workloadName)
 			}
-			out := new(bytes.Buffer)
-			for _, m := range manifests {
-				out.WriteString("---\n")
-				if err = info.Serializer.Encode(m.(runtime.Object), out); err != nil {
-					return errors.Wrapf(err, "workload: %s: failed to serialise manifest %s", workloadName, m.GetName())
+			if len(manifests) > 0 {
+				out := new(bytes.Buffer)
+				for _, m := range manifests {
+					out.WriteString("---\n")
+					if err = info.Serializer.Encode(m.(runtime.Object), out); err != nil {
+						return errors.Wrapf(err, "workload: %s: failed to serialise manifest %s", workloadName, m.GetName())
+					}
+					out.WriteString("\n")
 				}
-				out.WriteString("\n")
+				if err := os.WriteFile(filepath.Join(manifestsDirectory, fmt.Sprintf("workload-%s.yaml", workloadName)), out.Bytes(), 0600); err != nil {
+					return errors.Wrapf(err, "workload: %s: failed to write manifests file", workloadName)
+				}
+				slog.Info("Wrote manifests file for workload", "workload", workloadName)
 			}
-			if err := os.WriteFile(filepath.Join(manifestsDirectory, fmt.Sprintf("workload-%s.yaml", workloadName)), out.Bytes(), 0600); err != nil {
-				return errors.Wrapf(err, "workload: %s: failed to write manifests file", workloadName)
-			}
-			slog.Info("Wrote manifests file for workload", "workload", workloadName)
 		}
 
 		return nil

@@ -1,9 +1,10 @@
-package internal
+package convert
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/pkg/errors"
 	"github.com/score-spec/score-go/framework"
@@ -13,12 +14,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	machineryMeta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/score-spec/score-k8s/internal"
+	"github.com/score-spec/score-k8s/internal/project"
 )
 
-func ConvertWorkload(state *framework.State[framework.NoExtras, framework.NoExtras], workloadName string) ([]machineryMeta.Object, error) {
-	var err error
-
-	sf := framework.BuildSubstitutionFunction(state.Workloads[workloadName].Spec.Metadata, make(map[string]framework.OutputLookupFunc))
+func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta.Object, error) {
+	resOutputs, err := state.GetResourceOutputForWorkload(workloadName)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to generate outputs")
+	}
+	sf := framework.BuildSubstitutionFunction(state.Workloads[workloadName].Spec.Metadata, resOutputs)
 
 	spec := state.Workloads[workloadName].Spec
 	manifests := make([]machineryMeta.Object, 0, 1)
@@ -58,7 +64,7 @@ func ConvertWorkload(state *framework.State[framework.NoExtras, framework.NoExtr
 				if err != nil {
 					return nil, errors.Wrapf(err, "variables.%s: failed to substitute placeholders", k)
 				}
-				ev = append(ev, coreV1.EnvVar{Name: k, Value: v2})
+				ev = append(ev, coreV1.EnvVar{Name: k, Value: v2, ValueFrom: &coreV1.EnvVarSource{}})
 			}
 			c.Env = ev
 		}
@@ -95,17 +101,29 @@ func ConvertWorkload(state *framework.State[framework.NoExtras, framework.NoExtr
 					BinaryData: map[string][]byte{"file": content},
 				})
 
+				var mountMode *int32
+				if f.Mode != nil {
+					df, err := strconv.ParseInt(*f.Mode, 10, 32)
+					if err != nil {
+						return nil, fmt.Errorf("containers.%s.files[%d]: failed to parse mode", containerName, i)
+					}
+					mountMode = internal.Ref(int32(df))
+				}
+
 				volumes = append(volumes, coreV1.Volume{
 					Name: fmt.Sprintf("file-%d", i),
 					VolumeSource: coreV1.VolumeSource{
-						ConfigMap: &coreV1.ConfigMapVolumeSource{LocalObjectReference: coreV1.LocalObjectReference{Name: configMapName}},
+						ConfigMap: &coreV1.ConfigMapVolumeSource{
+							Items:                []coreV1.KeyToPath{{"file", filepath.Base(f.Target), mountMode}},
+							LocalObjectReference: coreV1.LocalObjectReference{Name: configMapName},
+						},
 					},
 				})
-				// TODO: how to mode?
+
 				c.VolumeMounts = append(c.VolumeMounts, coreV1.VolumeMount{
 					Name:      fmt.Sprintf("file-%d", i),
 					ReadOnly:  false,
-					MountPath: f.Target,
+					MountPath: filepath.Dir(f.Target),
 				})
 			}
 		}
@@ -133,7 +151,7 @@ func ConvertWorkload(state *framework.State[framework.NoExtras, framework.NoExtr
 			},
 		},
 		Spec: v1.DeploymentSpec{
-			Replicas: Ref(int32(1)),
+			Replicas: internal.Ref(int32(1)),
 			Selector: &machineryMeta.LabelSelector{
 				MatchExpressions: []machineryMeta.LabelSelectorRequirement{{"app", machineryMeta.LabelSelectorOpIn, []string{workloadName}}},
 			},
@@ -159,8 +177,8 @@ func buildProbe(input scoretypes.HttpProbe) coreV1.ProbeHandler {
 		HTTPGet: &coreV1.HTTPGetAction{
 			Path:   input.Path,
 			Port:   intstr.FromInt32(int32(input.Port)),
-			Host:   DerefOr(input.Host, ""),
-			Scheme: coreV1.URIScheme(DerefOr(input.Scheme, "")),
+			Host:   internal.DerefOr(input.Host, ""),
+			Scheme: coreV1.URIScheme(internal.DerefOr(input.Scheme, "")),
 		},
 	}
 	if len(input.HttpHeaders) > 0 {
