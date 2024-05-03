@@ -5,23 +5,31 @@
 
 - uri: template://example
   type: postgres
+  outputs: |
+    password: {{ encodeSecretRef "" "postgres-secret" "thing" }}
   manifests: |
+    - apiVersion: v1
+      kind: Secret
+      metadata:
+        name: postgres-secret
+      data:
+        thing: {{ b64enc "PassW0rd" }}
     - apiVersion: apps/v1
       kind: Deployment
       metadata:
         name: postgres
-        spec:
-          replicas: 1
-          selector:
-            matchLabels:
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: postgres
+        template:
+          metadata:
+            labels:
               app: postgres
-          template:
-            metadata:
-              labels:
-                app: postgres
-            spec:
-              containers:
-              - name: postgres
-                image: postgres:11
-                ports:
-                - containerPort: 5432
+          spec:
+            containers:
+            - name: postgres
+              image: postgres:11
+              ports:
+              - containerPort: 5432

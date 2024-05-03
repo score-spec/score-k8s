@@ -12,6 +12,7 @@ import (
 )
 
 var K8sCodecFactory = serializer.CodecFactory{}
+var YamlSerializerInfo = runtime.SerializerInfo{}
 
 func init() {
 	scheme := runtime.NewScheme()
@@ -22,4 +23,5 @@ func init() {
 	_ = networkingV1.AddToScheme(scheme)
 	_ = networkingV1b1.AddToScheme(scheme)
 	K8sCodecFactory = serializer.NewCodecFactory(scheme)
+	YamlSerializerInfo, _ = runtime.SerializerInfoForMediaType(K8sCodecFactory.SupportedMediaTypes(), runtime.ContentTypeYAML)
 }

@@ -45,42 +45,54 @@ var initCmd = &cobra.Command{
 			return errors.Wrap(err, "failed to ensure state directory")
 		}
 
-		state := new(framework.State[framework.NoExtras, framework.NoExtras])
 		stateFile := filepath.Join(projectDirectory, stateFileName)
-		if f, err := os.OpenFile(stateFile, os.O_CREATE|os.O_WRONLY, 0600); err != nil {
-			if errors.Is(err, os.ErrExist) {
-				return errors.Errorf("state file '%s' already exists", stateFile)
+		if _, err := os.Stat(stateFile); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return errors.Wrapf(err, "failed to check for existing state file")
 			}
-			return errors.Wrap(err, "failed to open empty project state")
+			if f, err := os.OpenFile(stateFile, os.O_CREATE|os.O_WRONLY, 0600); err != nil {
+				if errors.Is(err, os.ErrExist) {
+					return errors.Errorf("state file '%s' already exists", stateFile)
+				}
+				return errors.Wrap(err, "failed to open empty project state")
+			} else {
+				defer f.Close()
+				state := new(framework.State[framework.NoExtras, framework.NoExtras])
+				if err := yaml.NewEncoder(f).Encode(state); err != nil {
+					return errors.Wrap(err, "failed to write empty project state")
+				}
+				slog.Info("Created empty project state", "file", stateFile)
+			}
 		} else {
-			defer f.Close()
-			if err := yaml.NewEncoder(f).Encode(state); err != nil {
-				return errors.Wrap(err, "failed to write empty project state")
-			}
-			slog.Info("Created empty project state", "file", stateFile)
+			slog.Info("Skipping creation of state file since it already exists")
 		}
 
-		workload := &scoretypes.Workload{
-			ApiVersion: "score.dev/v1b1",
-			Metadata: map[string]interface{}{
-				"name": "example",
-			},
-			Containers: map[string]scoretypes.Container{
-				"main": {
-					Image: "stefanprodan/podinfo",
+		if _, err := os.Stat("score.yaml"); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return errors.Wrapf(err, "failed to check for existing score.yaml")
+			}
+			workload := &scoretypes.Workload{
+				ApiVersion: "score.dev/v1b1",
+				Metadata: map[string]interface{}{
+					"name": "example",
 				},
-			},
-		}
-		if f, err := os.OpenFile("score.yaml", os.O_CREATE|os.O_WRONLY, 0600); err != nil {
-			if !errors.Is(err, os.ErrExist) {
+				Containers: map[string]scoretypes.Container{
+					"main": {
+						Image: "stefanprodan/podinfo",
+					},
+				},
+			}
+			if f, err := os.OpenFile("score.yaml", os.O_CREATE|os.O_WRONLY, 0600); err != nil {
 				return errors.Wrap(err, "failed to open empty score.yaml file")
+			} else {
+				defer f.Close()
+				if err := yaml.NewEncoder(f).Encode(workload); err != nil {
+					return errors.Wrap(err, "failed to write empty score.yaml file")
+				}
+				slog.Info("Created empty score.yaml file", "file", "score.yaml")
 			}
 		} else {
-			defer f.Close()
-			if err := yaml.NewEncoder(f).Encode(workload); err != nil {
-				return errors.Wrap(err, "failed to write empty score.yaml file")
-			}
-			slog.Info("Created empty score.yaml file", "file", "score.yaml")
+			slog.Info("Skipping creation of score.yaml file since it already exists")
 		}
 
 		return nil
@@ -178,19 +190,15 @@ var generateCmd = &cobra.Command{
 		}
 		slog.Info("Created new manifests directory", "dir", manifestsDirectory)
 
-		info, _ := runtime.SerializerInfoForMediaType(internal.K8sCodecFactory.SupportedMediaTypes(), runtime.ContentTypeYAML)
-
 		if len(state.Extras.Manifests) > 0 {
 			out := new(bytes.Buffer)
 			for _, manifest := range state.Extras.Manifests {
-				out.WriteString("---\n")
-				raw, _ := yaml.Marshal(manifest)
-				obj, _, err := info.Serializer.Decode(raw, nil, nil)
-				if err != nil {
-					return errors.Wrapf(err, "failed to recode")
+				if p, ok := internal.FindFirstUnresolvedSecretRef("", manifest); ok {
+					return errors.Errorf("unresolved secret ref in manifest: %s", p)
 				}
-				if err := info.Serializer.Encode(obj, out); err != nil {
-					return errors.Wrapf(err, "failed to write manifest for %s", obj.GetObjectKind())
+				out.WriteString("---\n")
+				if err := yaml.NewEncoder(out).Encode(manifest); err != nil {
+					return errors.Wrapf(err, "failed to recode")
 				}
 				out.WriteString("\n")
 			}
@@ -208,10 +216,17 @@ var generateCmd = &cobra.Command{
 			if len(manifests) > 0 {
 				out := new(bytes.Buffer)
 				for _, m := range manifests {
-					out.WriteString("---\n")
-					if err = info.Serializer.Encode(m.(runtime.Object), out); err != nil {
+					subOut := new(bytes.Buffer)
+					if err = internal.YamlSerializerInfo.Serializer.Encode(m.(runtime.Object), subOut); err != nil {
 						return errors.Wrapf(err, "workload: %s: failed to serialise manifest %s", workloadName, m.GetName())
 					}
+					var intermediate interface{}
+					_ = yaml.Unmarshal(subOut.Bytes(), &intermediate)
+					if p, ok := internal.FindFirstUnresolvedSecretRef("", intermediate); ok {
+						return errors.Errorf("unresolved secret ref in manifest: %s", p)
+					}
+					out.WriteString("---\n")
+					_, _ = subOut.WriteTo(out)
 					out.WriteString("\n")
 				}
 				if err := os.WriteFile(filepath.Join(manifestsDirectory, fmt.Sprintf("workload-%s.yaml", workloadName)), out.Bytes(), 0600); err != nil {

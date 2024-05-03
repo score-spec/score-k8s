@@ -4,6 +4,12 @@
 
 ## FAQ
 
+### Which namespace will manifests be deployed into?
+
+Right now, no namespace is specified in the generated manifests and so they will obey any `--namespace` passed to the `kubctl` CLI.
+
+### 
+
 
 ### What's the implementation of placeholders and interpolation?
 

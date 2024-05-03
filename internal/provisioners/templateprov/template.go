@@ -26,6 +26,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/score-spec/score-go/framework"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	util "github.com/score-spec/score-k8s/internal"
 	"github.com/score-spec/score-k8s/internal/provisioners"
@@ -89,7 +90,10 @@ func renderTemplateAndDecode(raw string, data interface{}, out interface{}) erro
 	if raw == "" {
 		return nil
 	}
-	prepared, err := template.New("").Funcs(sprig.FuncMap()).Parse(raw)
+	prepared, err := template.New("").
+		Funcs(sprig.FuncMap()).
+		Funcs(template.FuncMap{"encodeSecretRef": util.EncodeSecretReference}).
+		Parse(raw)
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
 	}
@@ -173,6 +177,14 @@ func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) 
 	out.Manifests = make([]map[string]interface{}, 0)
 	if err := renderTemplateAndDecode(p.ManifestsTemplate, &data, &out.Manifests); err != nil {
 		return nil, fmt.Errorf("manifests template failed: %w", err)
+	}
+
+	// validate the manifests
+	for i, manifest := range out.Manifests {
+		raw, _ := yaml.Marshal(manifest)
+		if _, _, err := util.YamlSerializerInfo.StrictSerializer.Decode(raw, nil, nil); err != nil && !runtime.IsNotRegisteredError(err) {
+			return nil, fmt.Errorf("manifests.%d: matched a known kind but was not valid: %w", i, err)
+		}
 	}
 
 	return out, nil

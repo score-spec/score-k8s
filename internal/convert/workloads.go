@@ -21,6 +21,11 @@ import (
 	"github.com/score-spec/score-k8s/internal/project"
 )
 
+const (
+	WorkloadKindDeployment  = "Deployment"
+	WorkloadKindStatefulSet = "StatefulSet"
+)
+
 func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta.Object, error) {
 	resOutputs, err := state.GetResourceOutputForWorkload(workloadName)
 	if err != nil {
@@ -31,10 +36,19 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 	spec := state.Workloads[workloadName].Spec
 	manifests := make([]machineryMeta.Object, 0, 1)
 
+	kind := WorkloadKindDeployment
+	if d, ok := internal.FindAnnotation[string](spec.Metadata, internal.WorkloadKindAnnotation); ok {
+		kind = d
+		if kind != WorkloadKindDeployment && kind != WorkloadKindStatefulSet {
+			return nil, errors.Wrapf(err, "metadata: annotations: %s: unsupported workload kind", internal.WorkloadKindAnnotation)
+		}
+	}
+
 	// containers and volumes here are fun..
 	// we have to collect them all based on the parent paths they get mounted in and turn these into projected volumes
 	// then add the projected volumes to the deployment
 	volumes := make([]coreV1.Volume, 0)
+	volumeClaimTemplates := make([]coreV1.PersistentVolumeClaim, 0)
 
 	containers := make([]coreV1.Container, 0, len(spec.Containers))
 	for containerName, container := range spec.Containers {
@@ -62,36 +76,54 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		if len(container.Variables) > 0 {
 			ev := make([]coreV1.EnvVar, 0, len(container.Variables))
 			for k, v := range container.Variables {
-				v2, err := sf(v)
+				v2, err := framework.SubstituteString(v, sf)
 				if err != nil {
-					return nil, errors.Wrapf(err, "variables.%s: failed to substitute placeholders", k)
+					return nil, errors.Wrapf(err, "containers.%s.variables.%s: failed to substitute placeholders", containerName, k)
 				}
 				ev = append(ev, coreV1.EnvVar{Name: k, Value: v2, ValueFrom: &coreV1.EnvVarSource{}})
 			}
 			c.Env = ev
+
+			// TODO: resolve secret env vars here
 		}
 
 		if len(container.Volumes) > 0 {
 			for i, v := range container.Volumes {
 				res, ok := state.Resources[framework.ResourceUid(v.Source)]
 				if !ok {
-					return nil, errors.Wrapf(err, "volumes.%d: resource '%s' does not exist", i, v.Source)
-				} else if res.Type != "volume" {
-					return nil, errors.Wrapf(err, "volumes.%d: resource '%s' exists but is not a volume", i, v.Source)
-				}
-				// convert the outputs into a spec
-				raw, _ := json.Marshal(res.Outputs)
-				var volSource coreV1.VolumeSource
-				dec := json.NewDecoder(bytes.NewReader(raw))
-				dec.DisallowUnknownFields()
-				if err := dec.Decode(&volSource); err != nil {
-					return nil, errors.Wrapf(err, "volumes.%d: failed to convert resource '%s' outputs into volume sournce", i, v.Source)
+					return nil, errors.Wrapf(err, "containers.%s.volumes.%d: resource '%s' does not exist", containerName, i, v.Source)
 				}
 				volName := fmt.Sprintf("vol-%d", i)
-				volumes = append(volumes, coreV1.Volume{
-					Name:         volName,
-					VolumeSource: volSource,
-				})
+
+				// convert the outputs into a spec
+				raw, _ := json.Marshal(res.Outputs)
+				var anon struct {
+					Source    *coreV1.VolumeSource              `json:"source"`
+					ClaimSpec *coreV1.PersistentVolumeClaimSpec `json:"claimSpec"`
+				}
+				dec := json.NewDecoder(bytes.NewReader(raw))
+				dec.DisallowUnknownFields()
+				if err = dec.Decode(&anon); err != nil {
+					return nil, errors.Wrapf(err, "containers.%s.volumes.%d: failed to convert resource '%s' outputs into volume", containerName, i, v.Source)
+				}
+				if (anon.ClaimSpec == nil) == (anon.Source == nil) {
+					return nil, errors.Errorf("containers.%s.volumes.%d: failed to convert resource '%s' outputs into volume: either 'source' or 'claimSpec' required", containerName, i, v.Source)
+				} else if anon.ClaimSpec != nil && kind == WorkloadKindStatefulSet {
+					volumeClaimTemplates = append(volumeClaimTemplates, coreV1.PersistentVolumeClaim{
+						ObjectMeta: machineryMeta.ObjectMeta{
+							Name: volName,
+						},
+						Spec: *anon.ClaimSpec,
+					})
+				} else if anon.Source != nil {
+					volumes = append(volumes, coreV1.Volume{
+						Name:         volName,
+						VolumeSource: *anon.Source,
+					})
+				} else {
+					return nil, errors.Errorf("containers.%s.volumes.%d: failed to convert resource '%s' outputs into volume: 'claimSpec' can only be used when workload is a statefulset", containerName, i, v.Source)
+				}
+
 				c.VolumeMounts = append(c.VolumeMounts, coreV1.VolumeMount{
 					Name:      volName,
 					MountPath: v.Target,
@@ -118,6 +150,8 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 				} else {
 					return nil, fmt.Errorf("containers.%s.files[%d]: missing 'content' or 'source'", containerName, i)
 				}
+
+				// TODO: identify and convert secret reference here
 
 				configMapName := fmt.Sprintf("file-%s-%d", workloadName, i)
 				manifests = append(manifests, &coreV1.ConfigMap{
@@ -165,36 +199,85 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		containers = append(containers, c)
 	}
 
-	// TODO: collapse volumes together with projected volumes
+	// TODO: collapse all volumes together with projected volumes
 
-	// TODO: support annotations to turn this into a cronjob or stateful set
-
-	manifests = append(manifests, &v1.Deployment{
-		TypeMeta: machineryMeta.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
-		ObjectMeta: machineryMeta.ObjectMeta{
-			Name: workloadName,
-			Labels: map[string]string{
-				"app": workloadName,
+	switch kind {
+	case WorkloadKindDeployment:
+		manifests = append(manifests, &v1.Deployment{
+			TypeMeta: machineryMeta.TypeMeta{Kind: WorkloadKindDeployment, APIVersion: "apps/v1"},
+			ObjectMeta: machineryMeta.ObjectMeta{
+				Name:        workloadName,
+				Annotations: make(map[string]string),
 			},
-		},
-		Spec: v1.DeploymentSpec{
-			Replicas: internal.Ref(int32(1)),
-			Selector: &machineryMeta.LabelSelector{
-				MatchExpressions: []machineryMeta.LabelSelectorRequirement{{"app", machineryMeta.LabelSelectorOpIn, []string{workloadName}}},
-			},
-			Template: coreV1.PodTemplateSpec{
-				ObjectMeta: machineryMeta.ObjectMeta{
-					Labels: map[string]string{
-						"app": workloadName,
+			Spec: v1.DeploymentSpec{
+				Replicas: internal.Ref(int32(1)),
+				Selector: &machineryMeta.LabelSelector{
+					MatchExpressions: []machineryMeta.LabelSelectorRequirement{
+						{"app", machineryMeta.LabelSelectorOpIn, []string{workloadName}},
 					},
 				},
-				Spec: coreV1.PodSpec{
-					Containers: containers,
-					Volumes:    volumes,
+				Template: coreV1.PodTemplateSpec{
+					ObjectMeta: machineryMeta.ObjectMeta{
+						Labels: map[string]string{
+							"app": workloadName,
+						},
+					},
+					Spec: coreV1.PodSpec{
+						Containers: containers,
+						Volumes:    volumes,
+					},
 				},
 			},
-		},
-	})
+		})
+	case WorkloadKindStatefulSet:
+
+		// need to allocate a headless service here
+		headlessServiceName := fmt.Sprintf("%s-headless-svc", workloadName)
+		manifests = append(manifests, &coreV1.Service{
+			TypeMeta: machineryMeta.TypeMeta{Kind: "Service", APIVersion: "v1"},
+			ObjectMeta: machineryMeta.ObjectMeta{
+				Name:        headlessServiceName,
+				Annotations: make(map[string]string),
+			},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{
+					"app": workloadName,
+				},
+				ClusterIP: "None",
+				Ports:     []coreV1.ServicePort{{Name: "default", Port: 99, TargetPort: intstr.FromInt32(99)}},
+			},
+		})
+
+		manifests = append(manifests, &v1.StatefulSet{
+			TypeMeta: machineryMeta.TypeMeta{Kind: WorkloadKindStatefulSet, APIVersion: "apps/v1"},
+			ObjectMeta: machineryMeta.ObjectMeta{
+				Name:        workloadName,
+				Annotations: make(map[string]string),
+			},
+			Spec: v1.StatefulSetSpec{
+				Replicas: internal.Ref(int32(1)),
+				Selector: &machineryMeta.LabelSelector{
+					MatchExpressions: []machineryMeta.LabelSelectorRequirement{
+						{"app", machineryMeta.LabelSelectorOpIn, []string{workloadName}},
+					},
+				},
+				ServiceName: headlessServiceName,
+				Template: coreV1.PodTemplateSpec{
+					ObjectMeta: machineryMeta.ObjectMeta{
+						Labels: map[string]string{
+							"app": workloadName,
+						},
+					},
+					Spec: coreV1.PodSpec{
+						Containers: containers,
+						Volumes:    volumes,
+					},
+				},
+				// So the puzzle here is how to get this from our volumes...
+				VolumeClaimTemplates: volumeClaimTemplates,
+			},
+		})
+	}
 
 	return manifests, nil
 }
