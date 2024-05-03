@@ -1,6 +1,8 @@
 package convert
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -70,8 +72,33 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		}
 
 		if len(container.Volumes) > 0 {
-			// TODO: volumes
-			return nil, errors.New("volumes not supported")
+			for i, v := range container.Volumes {
+				res, ok := state.Resources[framework.ResourceUid(v.Source)]
+				if !ok {
+					return nil, errors.Wrapf(err, "volumes.%d: resource '%s' does not exist", i, v.Source)
+				} else if res.Type != "volume" {
+					return nil, errors.Wrapf(err, "volumes.%d: resource '%s' exists but is not a volume", i, v.Source)
+				}
+				// convert the outputs into a spec
+				raw, _ := json.Marshal(res.Outputs)
+				var volSource coreV1.VolumeSource
+				dec := json.NewDecoder(bytes.NewReader(raw))
+				dec.DisallowUnknownFields()
+				if err := dec.Decode(&volSource); err != nil {
+					return nil, errors.Wrapf(err, "volumes.%d: failed to convert resource '%s' outputs into volume sournce", i, v.Source)
+				}
+				volName := fmt.Sprintf("vol-%d", i)
+				volumes = append(volumes, coreV1.Volume{
+					Name:         volName,
+					VolumeSource: volSource,
+				})
+				c.VolumeMounts = append(c.VolumeMounts, coreV1.VolumeMount{
+					Name:      volName,
+					MountPath: v.Target,
+					SubPath:   internal.DerefOr(v.Path, ""),
+					ReadOnly:  internal.DerefOr(v.ReadOnly, false),
+				})
+			}
 		}
 
 		if len(container.Files) > 0 {
@@ -140,7 +167,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 
 	// TODO: collapse volumes together with projected volumes
 
-	// TODO: support annotations to turn this into a cronjob
+	// TODO: support annotations to turn this into a cronjob or stateful set
 
 	manifests = append(manifests, &v1.Deployment{
 		TypeMeta: machineryMeta.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},

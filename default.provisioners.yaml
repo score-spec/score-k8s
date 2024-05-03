@@ -1,3 +1,8 @@
+- uri: template://default-provisioners/volume
+  type: emptyDir
+  outputs: |
+    
+
 - uri: template://example
   type: postgres
   manifests: |

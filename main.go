@@ -143,6 +143,24 @@ var generateCmd = &cobra.Command{
 		}
 		slog.Info("Loaded provisioners", "#provisioners", len(localProvisioners))
 
+		state, err = provisioners.ProvisionResources(context.Background(), state, localProvisioners)
+		if err != nil {
+			return errors.Wrapf(err, "failed to provision resources")
+		}
+
+		if f, err := os.OpenFile(filepath.Join(projectDirectory, stateFileName+".tmp"), os.O_CREATE|os.O_WRONLY, 0600); err != nil {
+			return errors.Wrapf(err, "failed to open state file for writing")
+		} else {
+			defer f.Close()
+			if err = yaml.NewEncoder(f).Encode(state); err != nil {
+				return errors.Wrapf(err, "failed to marshal yaml to state file")
+			} else if err = f.Close(); err != nil {
+				return errors.Wrapf(err, "failed to close state file")
+			} else if err = os.Rename(f.Name(), filepath.Join(projectDirectory, stateFileName)); err != nil {
+				return errors.Wrapf(err, "failed to move new state file")
+			}
+		}
+
 		if items, err := os.ReadDir(manifestsDirectory); err == nil && len(items) > 0 {
 			manifestsBackup := manifestsDirectory + ".backup." + time.Now().Format("20060102150405")
 			if err := os.Rename(manifestsDirectory, manifestsBackup); err != nil {
@@ -159,11 +177,6 @@ var generateCmd = &cobra.Command{
 			return errors.Wrapf(err, "failed to create output manifests directory")
 		}
 		slog.Info("Created new manifests directory", "dir", manifestsDirectory)
-
-		state, err = provisioners.ProvisionResources(context.Background(), state, localProvisioners)
-		if err != nil {
-			return errors.Wrapf(err, "failed to provision resources")
-		}
 
 		info, _ := runtime.SerializerInfoForMediaType(internal.K8sCodecFactory.SupportedMediaTypes(), runtime.ContentTypeYAML)
 
