@@ -21,7 +21,6 @@ import (
 	"maps"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/score-spec/score-go/framework"
 	score "github.com/score-spec/score-go/types"
@@ -29,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	util "github.com/score-spec/score-k8s/internal"
+	"github.com/score-spec/score-k8s/internal/convert"
 	"github.com/score-spec/score-k8s/internal/project"
 )
 
@@ -185,16 +185,8 @@ func (po *ProvisionOutput) ApplyToStateAndProject(state *project.State, resUid f
 func buildWorkloadServices(state *project.State) map[string]NetworkService {
 	out := make(map[string]NetworkService, len(state.Workloads))
 	for workloadName, workloadState := range state.Workloads {
-		// the hostname of a workload is the <workload name>-<first container name>
-		var firstContainerName string
-		for name := range workloadState.Spec.Containers {
-			if firstContainerName == "" || strings.Compare(name, firstContainerName) < 0 {
-				firstContainerName = name
-			}
-		}
-		// setup ports exposure
 		ns := NetworkService{
-			ServiceName: workloadName + "-" + firstContainerName,
+			ServiceName: convert.WorkloadServiceName(workloadName),
 			Ports:       make(map[string]ServicePort),
 		}
 		if workloadState.Spec.Service != nil {

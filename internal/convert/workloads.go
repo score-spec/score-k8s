@@ -127,7 +127,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		containers = append(containers, c)
 	}
 
-	if len(spec.Service.Ports) > 0 {
+	if spec.Service != nil && len(spec.Service.Ports) > 0 {
 		portList := make([]coreV1.ServicePort, 0, len(spec.Service.Ports))
 		for portName, port := range spec.Service.Ports {
 			var proto = coreV1.ProtocolTCP
@@ -148,7 +148,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		manifests = append(manifests, &coreV1.Service{
 			TypeMeta: machineryMeta.TypeMeta{Kind: "Service", APIVersion: "v1"},
 			ObjectMeta: machineryMeta.ObjectMeta{
-				Name:        fmt.Sprintf("%s-svc", workloadName),
+				Name:        WorkloadServiceName(workloadName),
 				Annotations: make(map[string]string),
 			},
 			Spec: coreV1.ServiceSpec{
@@ -239,6 +239,10 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 	}
 
 	return manifests, nil
+}
+
+func WorkloadServiceName(workloadName string) string {
+	return fmt.Sprintf("%s-svc", workloadName)
 }
 
 func buildProbe(input scoretypes.HttpProbe) coreV1.ProbeHandler {

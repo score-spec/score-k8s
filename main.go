@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
+	"github.com/imdario/mergo"
 	"github.com/pkg/errors"
 	"github.com/score-spec/score-go/framework"
 	scoreloader "github.com/score-spec/score-go/loader"
@@ -34,6 +36,13 @@ var rootCmd = &cobra.Command{
 const projectDirectory = ".score-k8s"
 const stateFileName = "state.yaml"
 const manifestsDirectory = "manifests"
+
+const (
+	generateCmdOverridesFileFlag    = "overrides-file"
+	generateCmdOverridePropertyFlag = "override-property"
+	generateCmdImageFlag            = "image"
+	generateCmdOutputFlag           = "output"
+)
 
 var initCmd = &cobra.Command{
 	Use:           "init",
@@ -121,19 +130,65 @@ var generateCmd = &cobra.Command{
 			slog.Info("Loaded project state", "file", stateFile, "#workloads", len(state.Workloads), "#resources", len(state.Resources))
 		}
 
+		if len(args) != 1 && (cmd.Flags().Lookup(generateCmdOverridesFileFlag).Changed || cmd.Flags().Lookup(generateCmdOverridePropertyFlag).Changed) {
+			return errors.Errorf("cannot use --%s or --%s when 0 or more than 1 score files are provided", generateCmdOverridePropertyFlag, generateCmdOverridesFileFlag)
+		}
+
 		slices.Sort(args)
 		for _, arg := range args {
 			var rawWorkload map[string]interface{}
-			var workload scoretypes.Workload
 			if raw, err := os.ReadFile(arg); err != nil {
 				return errors.Wrapf(err, "failed to read input score file: %s", arg)
 			} else if err = yaml.Unmarshal(raw, &rawWorkload); err != nil {
 				return errors.Wrapf(err, "failed to decode input score file: %s", arg)
-			} else if err = scoreschema.Validate(rawWorkload); err != nil {
+			}
+
+			// apply overrides
+
+			if v, _ := cmd.Flags().GetString(generateCmdOverridesFileFlag); v != "" {
+				if err := parseAndApplyOverrideFile(v, generateCmdOverridesFileFlag, rawWorkload); err != nil {
+					return err
+				}
+			}
+
+			// Now read, parse, and apply any override properties to the score files
+			var err error
+			if v, _ := cmd.Flags().GetStringArray(generateCmdOverridePropertyFlag); len(v) > 0 {
+				for _, overridePropertyEntry := range v {
+					if rawWorkload, err = parseAndApplyOverrideProperty(overridePropertyEntry, generateCmdOverridePropertyFlag, rawWorkload); err != nil {
+						return err
+					}
+				}
+			}
+
+			// Ensure transforms are applied (be a good citizen)
+			if changes, err := scoreschema.ApplyCommonUpgradeTransforms(rawWorkload); err != nil {
+				return fmt.Errorf("failed to upgrade spec: %w", err)
+			} else if len(changes) > 0 {
+				for _, change := range changes {
+					slog.Info(fmt.Sprintf("Applying backwards compatible upgrade %s", change))
+				}
+			}
+
+			var workload scoretypes.Workload
+			if err = scoreschema.Validate(rawWorkload); err != nil {
 				return errors.Wrapf(err, "invalid score file: %s", arg)
 			} else if err = scoreloader.MapSpec(&workload, rawWorkload); err != nil {
 				return errors.Wrapf(err, "failed to decode input score file: %s", arg)
-			} else if state, err = state.WithWorkload(&workload, &arg, framework.NoExtras{}); err != nil {
+			}
+
+			// Apply image override
+			for containerName, container := range workload.Containers {
+				if container.Image == "." {
+					if v, _ := cmd.Flags().GetString(generateCmdImageFlag); v != "" {
+						container.Image = v
+						slog.Info("Set container image for container '%s' to %s from --%s", containerName, v, generateCmdImageFlag)
+						workload.Containers[containerName] = container
+					}
+				}
+			}
+
+			if state, err = state.WithWorkload(&workload, &arg, framework.NoExtras{}); err != nil {
 				return errors.Wrapf(err, "failed to add score file to project: %s", arg)
 			}
 			slog.Info("Added score file to project", "file", arg)
@@ -240,7 +295,53 @@ var generateCmd = &cobra.Command{
 	},
 }
 
+func parseAndApplyOverrideFile(entry string, flagName string, spec map[string]interface{}) error {
+	if raw, err := os.ReadFile(entry); err != nil {
+		return fmt.Errorf("--%s '%s' is invalid, failed to read file: %w", flagName, entry, err)
+	} else {
+		slog.Info(fmt.Sprintf("Applying overrides from %s to workload", entry))
+		var out map[string]interface{}
+		if err := yaml.Unmarshal(raw, &out); err != nil {
+			return fmt.Errorf("--%s '%s' is invalid: failed to decode yaml: %w", flagName, entry, err)
+		} else if err := mergo.Merge(&spec, out, mergo.WithOverride); err != nil {
+			return fmt.Errorf("--%s '%s' failed to apply: %w", flagName, entry, err)
+		}
+	}
+	return nil
+}
+
+func parseAndApplyOverrideProperty(entry string, flagName string, spec map[string]interface{}) (map[string]interface{}, error) {
+	parts := strings.SplitN(entry, "=", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("--%s '%s' is invalid, expected a =-separated path and value", flagName, entry)
+	}
+	if parts[1] == "" {
+		slog.Info(fmt.Sprintf("Overriding '%s' in workload", parts[0]))
+		after, err := framework.OverridePathInMap(spec, framework.ParseDotPathParts(parts[0]), true, nil)
+		if err != nil {
+			return nil, fmt.Errorf("--%s '%s' could not be applied: %w", flagName, entry, err)
+		}
+		return after, nil
+	} else {
+		var value interface{}
+		if err := yaml.Unmarshal([]byte(parts[1]), &value); err != nil {
+			return nil, fmt.Errorf("--%s '%s' is invalid, failed to unmarshal value as json: %w", flagName, entry, err)
+		}
+		slog.Info(fmt.Sprintf("Overriding '%s' in workload", parts[0]))
+		after, err := framework.OverridePathInMap(spec, framework.ParseDotPathParts(parts[0]), false, value)
+		if err != nil {
+			return nil, fmt.Errorf("--%s '%s' could not be applied: %w", flagName, entry, err)
+		}
+		return after, nil
+	}
+}
+
 func init() {
+	generateCmd.Flags().StringP(generateCmdOutputFlag, "o", "manifests.yaml", "The output manifests file to write the manifests to")
+	generateCmd.Flags().String(generateCmdOverridesFileFlag, "", "An optional file of Score overrides to merge in")
+	generateCmd.Flags().StringArray(generateCmdOverridePropertyFlag, []string{}, "An optional set of path=key overrides to set or remove")
+	generateCmd.Flags().String(generateCmdImageFlag, "", "An optional container image to use for any container with image == '.'")
+
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.CompletionOptions = cobra.CompletionOptions{HiddenDefaultCmd: true}
