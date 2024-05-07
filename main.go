@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/imdario/mergo"
 	"github.com/pkg/errors"
@@ -226,71 +225,62 @@ var generateCmd = &cobra.Command{
 			} else if err = os.Rename(f.Name(), filepath.Join(projectDirectory, stateFileName)); err != nil {
 				return errors.Wrapf(err, "failed to move new state file")
 			}
+			slog.Info("Persisted state file")
 		}
 
-		if items, err := os.ReadDir(manifestsDirectory); err == nil && len(items) > 0 {
-			manifestsBackup := manifestsDirectory + ".backup." + time.Now().Format("20060102150405")
-			if err := os.Rename(manifestsDirectory, manifestsBackup); err != nil {
-				if !errors.Is(err, os.ErrNotExist) {
-					return errors.Wrap(err, "failed to backup previous manifests")
-				}
-				slog.Info("No previous manifests directory to backup")
-			} else {
-				slog.Info("Backed up manifests directory", "dir", manifestsBackup)
-			}
-		}
+		out := new(bytes.Buffer)
+		var outCount int
 
-		if err := os.MkdirAll(manifestsDirectory, 0700); err != nil {
-			return errors.Wrapf(err, "failed to create output manifests directory")
-		}
-		slog.Info("Created new manifests directory", "dir", manifestsDirectory)
-
-		if len(state.Extras.Manifests) > 0 {
-			out := new(bytes.Buffer)
-			for _, manifest := range state.Extras.Manifests {
-				if p, ok := internal.FindFirstUnresolvedSecretRef("", manifest); ok {
-					return errors.Errorf("unresolved secret ref in manifest: %s", p)
-				}
-				out.WriteString("---\n")
-				if err := yaml.NewEncoder(out).Encode(manifest); err != nil {
-					return errors.Wrapf(err, "failed to recode")
-				}
-				out.WriteString("\n")
+		for _, manifest := range state.Extras.Manifests {
+			if p, ok := internal.FindFirstUnresolvedSecretRef("", manifest); ok {
+				return errors.Errorf("unresolved secret ref in manifest: %s", p)
 			}
-			if err := os.WriteFile(filepath.Join(manifestsDirectory, "resource.yaml"), out.Bytes(), 0600); err != nil {
-				return errors.Wrapf(err, "resources: failed to write manifests file")
+			out.WriteString("---\n")
+			enc := yaml.NewEncoder(out)
+			enc.SetIndent(2)
+			if err := enc.Encode(manifest); err != nil {
+				return errors.Wrapf(err, "failed to recode")
 			}
-			slog.Info("Wrote manifests file for resources")
+			out.WriteString("\n")
+			outCount += 1
 		}
+		slog.Info(fmt.Sprintf("Wrote %d resource manifests to manifests buffer", len(state.Extras.Manifests)))
 
 		for workloadName := range state.Workloads {
 			manifests, err := convert.ConvertWorkload(state, workloadName)
 			if err != nil {
 				return errors.Wrapf(err, "workload: %s: failed to convert", workloadName)
 			}
-			if len(manifests) > 0 {
-				out := new(bytes.Buffer)
-				for _, m := range manifests {
-					subOut := new(bytes.Buffer)
-					if err = internal.YamlSerializerInfo.Serializer.Encode(m.(runtime.Object), subOut); err != nil {
-						return errors.Wrapf(err, "workload: %s: failed to serialise manifest %s", workloadName, m.GetName())
-					}
-					var intermediate interface{}
-					_ = yaml.Unmarshal(subOut.Bytes(), &intermediate)
-					if p, ok := internal.FindFirstUnresolvedSecretRef("", intermediate); ok {
-						return errors.Errorf("unresolved secret ref in manifest: %s", p)
-					}
-					out.WriteString("---\n")
-					_, _ = subOut.WriteTo(out)
-					out.WriteString("\n")
+			for _, m := range manifests {
+				subOut := new(bytes.Buffer)
+				if err = internal.YamlSerializerInfo.Serializer.Encode(m.(runtime.Object), subOut); err != nil {
+					return errors.Wrapf(err, "workload: %s: failed to serialise manifest %s", workloadName, m.GetName())
 				}
-				if err := os.WriteFile(filepath.Join(manifestsDirectory, fmt.Sprintf("workload-%s.yaml", workloadName)), out.Bytes(), 0600); err != nil {
-					return errors.Wrapf(err, "workload: %s: failed to write manifests file", workloadName)
+				var intermediate interface{}
+				_ = yaml.Unmarshal(subOut.Bytes(), &intermediate)
+				if p, ok := internal.FindFirstUnresolvedSecretRef("", intermediate); ok {
+					return errors.Errorf("unresolved secret ref in manifest: %s", p)
 				}
-				slog.Info("Wrote manifests file for workload", "workload", workloadName)
+				out.WriteString("---\n")
+				_, _ = subOut.WriteTo(out)
+				out.WriteString("\n")
+				outCount += 1
 			}
+			slog.Info(fmt.Sprintf("Wrote %d manifests to manifests buffer for workload '%s'", len(manifests), workloadName))
 		}
 
+		v, _ := cmd.Flags().GetString(generateCmdOutputFlag)
+		if v == "" {
+			return fmt.Errorf("no output file specified")
+		} else if v == "-" {
+			_, _ = fmt.Fprint(cmd.OutOrStdout(), out.String())
+		} else if err := os.WriteFile(v+".tmp", out.Bytes(), 0644); err != nil {
+			return fmt.Errorf("failed to write output file: %w", err)
+		} else if err := os.Rename(v+".tmp", v); err != nil {
+			return fmt.Errorf("failed to complete writing output file: %w", err)
+		} else {
+			slog.Info(fmt.Sprintf("Wrote manifests to '%s'", v))
+		}
 		return nil
 	},
 }

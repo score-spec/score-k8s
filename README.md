@@ -32,7 +32,6 @@ The `score.yaml` specification file can be executed against a _Score Implementat
 
 1. Scale up in-cluster after deployment (`kubectl scale --replicas=3 deployment/my-workload`).
 2. Or, use a [Kustomize](https://kustomize.io/) patch to override the number of replicas with `kubectl apply -k`.
-3. Or, use the built in `--patch-manifest 'apps/v1/Deployment/''`
 
 ### Which namespace will manifests be deployed into?
 
