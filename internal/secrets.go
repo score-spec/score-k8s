@@ -38,7 +38,7 @@ func DecodeSecretReferences(source string) ([]string, []SecretRef, error) {
 		si := strings.Index(part, magicSuffix)
 		if si >= 0 {
 			r := part[:si]
-			parts[i] = part[si+2:]
+			parts[1+i] = part[si+len(magicSuffix):]
 			bits := strings.Split(r, ".")
 			if len(bits) != 3 {
 				return nil, nil, errors.Errorf("invalid secret ref: more than 3 parts")

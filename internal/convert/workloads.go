@@ -1,19 +1,14 @@
 package convert
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/score-spec/score-go/framework"
 	scoretypes "github.com/score-spec/score-go/types"
 	v1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	machineryMeta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -22,8 +17,9 @@ import (
 )
 
 const (
-	WorkloadKindDeployment  = "Deployment"
-	WorkloadKindStatefulSet = "StatefulSet"
+	WorkloadKindDeployment    = "Deployment"
+	WorkloadKindStatefulSet   = "StatefulSet"
+	SelectorLabelWorkloadName = "score-workload"
 )
 
 func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta.Object, error) {
@@ -60,134 +56,66 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			VolumeMounts: make([]coreV1.VolumeMount, 0),
 		}
 
-		if container.Resources != nil {
-			if container.Resources.Requests != nil {
-				c.Resources.Requests, err = buildResourceList(container.Resources.Requests)
-				if err != nil {
-					return nil, errors.Wrapf(err, "containers.%s.resources.requests", containerName)
-				}
-				c.Resources.Limits, err = buildResourceList(container.Resources.Limits)
-				if err != nil {
-					return nil, errors.Wrapf(err, "containers.%s.resources.limits", containerName)
-				}
-			}
+		c.Resources, err = convertContainerResources(container.Resources)
+		if err != nil {
+			return nil, errors.Wrapf(err, "containers.%s.resources: failed to convert", containerName)
 		}
 
-		if len(container.Variables) > 0 {
-			ev := make([]coreV1.EnvVar, 0, len(container.Variables))
-			for k, v := range container.Variables {
-				v2, err := framework.SubstituteString(v, sf)
-				if err != nil {
-					return nil, errors.Wrapf(err, "containers.%s.variables.%s: failed to substitute placeholders", containerName, k)
-				}
-				ev = append(ev, coreV1.EnvVar{Name: k, Value: v2, ValueFrom: &coreV1.EnvVarSource{}})
-			}
-			c.Env = ev
-
-			// TODO: resolve secret env vars here
+		c.Env, err = convertContainerVariables(container.Variables, sf)
+		if err != nil {
+			return nil, errors.Wrapf(err, "containers.%s.variables: failed to convert", containerName)
 		}
 
-		if len(container.Volumes) > 0 {
-			for i, v := range container.Volumes {
-				res, ok := state.Resources[framework.ResourceUid(v.Source)]
-				if !ok {
-					return nil, errors.Wrapf(err, "containers.%s.volumes.%d: resource '%s' does not exist", containerName, i, v.Source)
-				}
-				volName := fmt.Sprintf("vol-%d", i)
+		containerVolumes := make([]coreV1.Volume, 0)
+		containerVolumeMounts := make([]coreV1.VolumeMount, 0)
 
-				// convert the outputs into a spec
-				raw, _ := json.Marshal(res.Outputs)
-				var anon struct {
-					Source    *coreV1.VolumeSource              `json:"source"`
-					ClaimSpec *coreV1.PersistentVolumeClaimSpec `json:"claimSpec"`
+		volSubstitutionFunction := func(ref string) (string, error) {
+			if parts := framework.SplitRefParts(ref); len(parts) == 2 && parts[0] == "resources" {
+				resName := parts[1]
+				if res, ok := spec.Resources[resName]; ok {
+					return string(framework.NewResourceUid(workloadName, resName, res.Type, res.Class, res.Id)), nil
 				}
-				dec := json.NewDecoder(bytes.NewReader(raw))
-				dec.DisallowUnknownFields()
-				if err = dec.Decode(&anon); err != nil {
-					return nil, errors.Wrapf(err, "containers.%s.volumes.%d: failed to convert resource '%s' outputs into volume", containerName, i, v.Source)
-				}
-				if (anon.ClaimSpec == nil) == (anon.Source == nil) {
-					return nil, errors.Errorf("containers.%s.volumes.%d: failed to convert resource '%s' outputs into volume: either 'source' or 'claimSpec' required", containerName, i, v.Source)
-				} else if anon.ClaimSpec != nil && kind == WorkloadKindStatefulSet {
-					volumeClaimTemplates = append(volumeClaimTemplates, coreV1.PersistentVolumeClaim{
-						ObjectMeta: machineryMeta.ObjectMeta{
-							Name: volName,
-						},
-						Spec: *anon.ClaimSpec,
-					})
-				} else if anon.Source != nil {
-					volumes = append(volumes, coreV1.Volume{
-						Name:         volName,
-						VolumeSource: *anon.Source,
-					})
-				} else {
-					return nil, errors.Errorf("containers.%s.volumes.%d: failed to convert resource '%s' outputs into volume: 'claimSpec' can only be used when workload is a statefulset", containerName, i, v.Source)
-				}
-
-				c.VolumeMounts = append(c.VolumeMounts, coreV1.VolumeMount{
-					Name:      volName,
-					MountPath: v.Target,
-					SubPath:   internal.DerefOr(v.Path, ""),
-					ReadOnly:  internal.DerefOr(v.ReadOnly, false),
-				})
+				return "", fmt.Errorf("resource '%s' does not exist", resName)
 			}
+			return sf(ref)
 		}
-
-		if len(container.Files) > 0 {
-			for i, f := range container.Files {
-				var content []byte
-				if f.Content != nil {
-					content = []byte(*f.Content)
-				} else if f.Source != nil {
-					sourcePath := *f.Source
-					if !filepath.IsAbs(sourcePath) && state.Workloads[workloadName].File != nil {
-						sourcePath = filepath.Join(filepath.Dir(*state.Workloads[workloadName].File), sourcePath)
+		for i, volume := range container.Volumes {
+			if mount, vol, claim, err := convertContainerVolume(i, volume, state.Resources, volSubstitutionFunction); err != nil {
+				return nil, errors.Wrapf(err, "containers.%s.volumes.%d: failed to convert", containerName, i)
+			} else {
+				containerVolumeMounts = append(containerVolumeMounts, mount)
+				if claim != nil {
+					if kind != WorkloadKindStatefulSet {
+						return nil, errors.Wrapf(err, "containers.%s.volumes.%d: volume claims can only be set on stateful sets", containerName, i)
 					}
-					content, err = os.ReadFile(sourcePath)
-					if err != nil {
-						return nil, fmt.Errorf("containers.%s.files[%d].source: failed to read: %w", containerName, i, err)
-					}
-				} else {
-					return nil, fmt.Errorf("containers.%s.files[%d]: missing 'content' or 'source'", containerName, i)
+					volumeClaimTemplates = append(volumeClaimTemplates, *claim)
+				} else if vol != nil {
+					containerVolumes = append(containerVolumes, *vol)
 				}
-
-				// TODO: identify and convert secret reference here
-
-				configMapName := fmt.Sprintf("file-%s-%d", workloadName, i)
-				manifests = append(manifests, &coreV1.ConfigMap{
-					TypeMeta: machineryMeta.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
-					ObjectMeta: machineryMeta.ObjectMeta{
-						Name: configMapName,
-					},
-					BinaryData: map[string][]byte{"file": content},
-				})
-
-				var mountMode *int32
-				if f.Mode != nil {
-					df, err := strconv.ParseInt(*f.Mode, 10, 32)
-					if err != nil {
-						return nil, fmt.Errorf("containers.%s.files[%d]: failed to parse mode", containerName, i)
-					}
-					mountMode = internal.Ref(int32(df))
-				}
-
-				volumes = append(volumes, coreV1.Volume{
-					Name: fmt.Sprintf("file-%d", i),
-					VolumeSource: coreV1.VolumeSource{
-						ConfigMap: &coreV1.ConfigMapVolumeSource{
-							Items:                []coreV1.KeyToPath{{"file", filepath.Base(f.Target), mountMode}},
-							LocalObjectReference: coreV1.LocalObjectReference{Name: configMapName},
-						},
-					},
-				})
-
-				c.VolumeMounts = append(c.VolumeMounts, coreV1.VolumeMount{
-					Name:      fmt.Sprintf("file-%d", i),
-					ReadOnly:  false,
-					MountPath: filepath.Dir(f.Target),
-				})
 			}
 		}
+
+		for i, f := range container.Files {
+			if mount, cfg, vol, err := convertContainerFile(i, f, fmt.Sprintf("%s-%s-", workloadName, containerName), state.Workloads[workloadName].File, sf); err != nil {
+				return nil, errors.Wrapf(err, "containers.%s.files.%d: failed to convert", containerName, i)
+			} else {
+				containerVolumeMounts = append(containerVolumeMounts, mount)
+				if cfg != nil {
+					manifests = append(manifests, cfg)
+				}
+				if vol != nil {
+					containerVolumes = append(containerVolumes, *vol)
+				}
+			}
+		}
+
+		// collapse projected volume mounts
+		containerVolumes, containerVolumeMounts, err = collapseVolumeMounts(containerVolumes, containerVolumeMounts)
+		if err != nil {
+			return nil, errors.Wrapf(err, "containers.%s.volumes: failed to combine projected volumes", containerName)
+		}
+		c.VolumeMounts = containerVolumeMounts
+		volumes = append(volumes, containerVolumes...)
 
 		if container.LivenessProbe != nil {
 			c.LivenessProbe = &coreV1.Probe{ProbeHandler: buildProbe(container.LivenessProbe.HttpGet)}
@@ -199,7 +127,38 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		containers = append(containers, c)
 	}
 
-	// TODO: collapse all volumes together with projected volumes
+	if len(spec.Service.Ports) > 0 {
+		portList := make([]coreV1.ServicePort, 0, len(spec.Service.Ports))
+		for portName, port := range spec.Service.Ports {
+			var proto = coreV1.ProtocolTCP
+			if port.Protocol != nil && *port.Protocol != "" {
+				proto = coreV1.Protocol(strings.ToUpper(string(*port.Protocol)))
+			}
+			var targetPort = port.Port
+			if port.TargetPort != nil && *port.TargetPort > 0 {
+				targetPort = *port.TargetPort // Defaults to the published port
+			}
+			portList = append(portList, coreV1.ServicePort{
+				Name:       portName,
+				Port:       int32(port.Port),
+				TargetPort: intstr.FromInt32(int32(targetPort)),
+				Protocol:   proto,
+			})
+		}
+		manifests = append(manifests, &coreV1.Service{
+			TypeMeta: machineryMeta.TypeMeta{Kind: "Service", APIVersion: "v1"},
+			ObjectMeta: machineryMeta.ObjectMeta{
+				Name:        fmt.Sprintf("%s-svc", workloadName),
+				Annotations: make(map[string]string),
+			},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{
+					SelectorLabelWorkloadName: workloadName,
+				},
+				Ports: portList,
+			},
+		})
+	}
 
 	switch kind {
 	case WorkloadKindDeployment:
@@ -213,13 +172,13 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 				Replicas: internal.Ref(int32(1)),
 				Selector: &machineryMeta.LabelSelector{
 					MatchExpressions: []machineryMeta.LabelSelectorRequirement{
-						{"app", machineryMeta.LabelSelectorOpIn, []string{workloadName}},
+						{SelectorLabelWorkloadName, machineryMeta.LabelSelectorOpIn, []string{workloadName}},
 					},
 				},
 				Template: coreV1.PodTemplateSpec{
 					ObjectMeta: machineryMeta.ObjectMeta{
 						Labels: map[string]string{
-							"app": workloadName,
+							SelectorLabelWorkloadName: workloadName,
 						},
 					},
 					Spec: coreV1.PodSpec{
@@ -241,7 +200,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			},
 			Spec: coreV1.ServiceSpec{
 				Selector: map[string]string{
-					"app": workloadName,
+					SelectorLabelWorkloadName: workloadName,
 				},
 				ClusterIP: "None",
 				Ports:     []coreV1.ServicePort{{Name: "default", Port: 99, TargetPort: intstr.FromInt32(99)}},
@@ -258,14 +217,14 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 				Replicas: internal.Ref(int32(1)),
 				Selector: &machineryMeta.LabelSelector{
 					MatchExpressions: []machineryMeta.LabelSelectorRequirement{
-						{"app", machineryMeta.LabelSelectorOpIn, []string{workloadName}},
+						{SelectorLabelWorkloadName, machineryMeta.LabelSelectorOpIn, []string{workloadName}},
 					},
 				},
 				ServiceName: headlessServiceName,
 				Template: coreV1.PodTemplateSpec{
 					ObjectMeta: machineryMeta.ObjectMeta{
 						Labels: map[string]string{
-							"app": workloadName,
+							SelectorLabelWorkloadName: workloadName,
 						},
 					},
 					Spec: coreV1.PodSpec{
@@ -299,22 +258,4 @@ func buildProbe(input scoretypes.HttpProbe) coreV1.ProbeHandler {
 		ph.HTTPGet.HTTPHeaders = h
 	}
 	return ph
-}
-
-func buildResourceList(input *scoretypes.ResourcesLimits) (coreV1.ResourceList, error) {
-	var err error
-	output := make(coreV1.ResourceList)
-	if input.Cpu != nil {
-		output["cpu"], err = resource.ParseQuantity(*input.Cpu)
-		if err != nil {
-			return nil, errors.Wrapf(err, "cpu: failed to parse")
-		}
-	}
-	if input.Memory != nil {
-		output["memory"], err = resource.ParseQuantity(*input.Memory)
-		if err != nil {
-			return nil, errors.Wrapf(err, "memory: failed to parse")
-		}
-	}
-	return output, nil
 }
