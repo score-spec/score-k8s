@@ -4,11 +4,47 @@
 
 `score-k8s` supports most aspects of the Score Workload specification and supports a powerful resource provisioning system for supplying and customising the dynamic configuration of attached services such as databases, queues, storage, and other network or storage APIs.
 
+![workflow diagram](workflow.drawio.png)
+
 ## Score overview
 
 Score aims to improve developer productivity and experience by reducing the risk of configuration inconsistencies between local and remote environments. It provides developer-centric workload specification (`score.yaml`) which captures a workloads runtime requirements in a platform-agnostic manner. Learn more [here](https://github.com/score-spec/spec#-what-is-score).
 
 The `score.yaml` specification file can be executed against a _Score Implementation CLI_, a conversion tool for application developers to generate environment specific configuration. In combination with environment specific parameters, the CLI tool can run your workload in the target environment by generating a platform-specific configuration file.
+
+An example Score file may look like:
+
+```yaml
+apiVersion: score.dev/v1b1
+metadata:
+  name: demo-app
+# The workload contains a single container with a demo image
+containers:
+  main:
+    image: ghcr.io/astromechza/demo-app:latest
+    variables:
+      # We're injecting a redis resource here that gets provisioned from the resources section
+      OVERRIDE_REDIS: "redis://${resources.cache.username}:${resources.cache.password}@${resources.cache.host}:${resources.cache.port}"
+# Declare that this service exposes port 8080, we're using that in the route resource
+service:
+  ports:
+    web:
+      port: 8080
+resources:
+  # The dns resource provisions a 'host' output as a valid hostname.
+  dns:
+    type: dns
+  # The route resource routes requests matching the prefix path and hostname to our service port
+  route:
+    type: route
+    params:
+      host: ${resources.dns.host}
+      path: /
+      port: 8080
+  # And here is the definition of our cache resource
+  cache:
+    type: redis
+```
 
 ## Feature support
 
