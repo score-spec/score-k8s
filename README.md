@@ -1,6 +1,6 @@
 # score-k8s
 
-`score-k8s` is an implementation of the Score Workload specification for Kubernetes and converts input Score files into a directory of Kubernetes manifests that can be packaged or installed through `kubectl apply`. `score-k8s` is a reference implementation for [Score](https://docs.score.dev/) and is used mostly for demonstration and reference purposes but _may_ be used for pre-production/production use if necessary.
+`score-k8s` is an implementation of the Score Workload specification for Kubernetes and converts input Score files into a YAML file containing Kubernetes manifests that can be packaged or installed through `kubectl apply`. `score-k8s` is a reference implementation for [Score](https://docs.score.dev/) and is used mostly for demonstration and reference purposes but _may_ be used for pre-production/production use if necessary.
 
 `score-k8s` supports most aspects of the Score Workload specification and supports a powerful resource provisioning system for supplying and customising the dynamic configuration of attached services such as databases, queues, storage, and other network or storage APIs.
 
