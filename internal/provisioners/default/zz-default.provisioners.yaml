@@ -1,0 +1,204 @@
+# As an example we have a 'volume' type which returns an emptyDir volume.
+# In production or for real applications you may want to replace this with a provisioner for a tmpfs, host path, or
+# persistent volume and claims.
+- uri: template://default-provisioners/volume
+  type: volume
+  outputs: |
+    source: 
+      emptyDir: {}
+
+# The default dns provisioner just outputs a random localhost domain because we don't know whether external-dns is
+# available. You should replace this with your own dns name generation that matches your external-dns controller.
+- uri: template://default-provisioners/dns
+  type: dns
+  init: |
+    randomHostname: dns{{ randAlphaNum 6 | lower }}.localhost
+  state: |
+    instanceHostname: {{ dig "instanceHostname" .Init.randomHostname .State | quote }}
+  outputs: |
+    host: {{ .State.instanceHostname }}
+
+# Routes could be implemented as either traditional ingress resources or using the newer gateway API.
+# In this default provisioner we use the gateway API with some sensible defaults. But you may wish to replace this.
+- uri: template://default-provisioners/route
+  type: route
+  init: |
+    randomRouteName: routing-{{ .SourceWorkload }}-{{ randAlphaNum 6 | lower }}
+    {{ if not (regexMatch "^/|(/([^/]+))+$" .Params.path) }}{{ fail "params.path start with a / but cannot end with /" }}{{ end }}
+    {{ if not (regexMatch "^[a-z0-9_.-]{1,253}$" .Params.host) }}{{ fail (cat "params.host must be a valid hostname but was" .Params.host) }}{{ end }}
+    {{ $ports := (index .WorkloadServices .SourceWorkload).Ports }}
+    {{ if not $ports }}{{ fail "no service ports exist" }}{{ end }}
+    {{ $port := index $ports (print .Params.port) }}
+    {{ if not $port.TargetPort }}{{ fail "params.port is not a named service port" }}{{ end }}
+  state: |
+    routeName: {{ dig "routeName" .Init.randomRouteName .State | quote }}
+  manifests: |
+    - apiVersion: gateway.networking.k8s.io/v1
+      kind: HTTPRoute
+      metadata:
+        name: {{ .State.routeName }}
+      spec:
+        parentRefs:
+        - name: default
+        hostnames:
+        - {{ .Params.host | quote }}
+        rules:
+        - matches:
+          - path: 
+              type: PathPrefix
+              value: {{ .Params.path | quote }}
+          backendRefs:
+          - name: {{ (index .WorkloadServices .SourceWorkload).ServiceName }}
+            port: {{ .Params.port }}
+
+- uri: template://default-provisioners/postgres
+  type: postgres
+  init: |
+    randomServiceName: pg-{{ randAlphaNum 6 | lower }}
+    randomDatabase: db-{{ randAlpha 8 }}
+    randomUsername: user-{{ randAlpha 8 }}
+    randomPassword: {{ randAlphaNum 16 | quote }}
+  state: |
+    service: {{ dig "service" .Init.randomServiceName .State | quote }}
+    database: {{ dig "database" .Init.randomDatabase .State | quote }}
+    username: {{ dig "username" .Init.randomUsername .State | quote }}
+    password: {{ dig "password" .Init.randomPassword .State | quote }}
+  outputs: |
+    host: {{ .State.service }}
+    port: 5432
+    name: {{ .State.database }}
+    database: {{ .State.database }}
+    username: {{ .State.username }}
+    password: {{ .State.password }}
+  manifests: |
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: {{ .State.service }}
+      spec:
+        replicas: 1
+        serviceName: {{ .State.service }}
+        selector:
+          matchLabels:
+            scoreWorkload: {{ .SourceWorkload }}
+            app: {{ .State.service }}
+        template:
+          metadata:
+            labels:
+              scoreWorkload: {{ .SourceWorkload }}
+              app: {{ .State.service }}
+          spec:
+            containers:
+            - name: postgres-db
+              image: postgres:16
+              ports:
+              - name: postgres
+                containerPort: 5432
+              env:
+              - name: POSTGRES_USER
+                value: {{ .State.username | quote }}
+              - name: POSTGRES_PASSWORD
+                value: {{ .State.password | quote }}
+              - name: POSTGRES_DB
+                value: {{ .State.database | quote }}
+              volumeMounts:
+              - name: pv-data
+                mountPath: /var/lib/postgresql/data
+        volumeClaimTemplates:
+        - metadata:
+            name: pv-data
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 1Gi
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{ .State.service }}
+      spec:
+        selector:
+          scoreWorkload: {{ .SourceWorkload }}
+          app: {{ .State.service }}
+        type: ClusterIP
+        ports:
+        - port: 5432
+          targetPort: 5432
+
+- uri: template://default-provisioners/redis
+  type: redis
+  init: |
+    randomServiceName: redis-{{ randAlphaNum 6 | lower }}
+    randomPassword: {{ randAlphaNum 16 | quote }}
+  state: |
+    service: {{ dig "service" .Init.randomServiceName .State | quote }}
+    username: default
+    password: {{ dig "password" .Init.randomPassword .State | quote }}
+  outputs: |
+    host: {{ .State.service }}
+    port: 6379
+    username: {{ .State.username }}
+    password: {{ .State.password }}
+  manifests: |
+    - apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: {{ .State.service }}
+      data:
+        redis.conf: |
+          requirepass {{ .State.password }}
+          port 6379
+          save 60 1
+          loglevel warning
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: {{ .State.service }}
+      spec:
+        replicas: 1
+        serviceName: {{ .State.service }}
+        selector:
+          matchLabels:
+            scoreWorkload: {{ .SourceWorkload }}
+            app: {{ .State.service }}
+        template:
+          metadata:
+            labels:
+              scoreWorkload: {{ .SourceWorkload }}
+              app: {{ .State.service }}
+          spec:
+            containers:
+            - name: redis
+              image: redis:7
+              ports:
+              - name: redis
+                containerPort: 6379
+              volumeMounts:
+              - name: redis-data
+                mountPath: /data
+              - name: config
+                mountPath: /usr/local/etc/redis
+            volumes:
+            - name: config
+              configMap:
+                name: {{ .State.service }}
+        volumeClaimTemplates:
+        - metadata:
+            name: redis-data
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 1Gi
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{ .State.service }}
+      spec:
+        selector:
+          scoreWorkload: {{ .SourceWorkload }}
+          app: {{ .State.service }}
+        type: ClusterIP
+        ports:
+        - port: 6379
+          targetPort: 6379
