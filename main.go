@@ -75,6 +75,27 @@ var initCmd = &cobra.Command{
 			slog.Info("Skipping creation of state file since it already exists")
 		}
 
+		defaultProvisioners := filepath.Join(projectDirectory, "zz-default.provisioners.yaml")
+		if _, err := os.Stat(defaultProvisioners); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return errors.Wrapf(err, "failed to check for existing default provisioners file")
+			}
+			if f, err := os.OpenFile(defaultProvisioners, os.O_CREATE|os.O_WRONLY, 0600); err != nil {
+				if errors.Is(err, os.ErrExist) {
+					return errors.Errorf("default provisioners file '%s' already exists", defaultProvisioners)
+				}
+				return errors.Wrap(err, "failed to open empty provisioners file")
+			} else {
+				defer f.Close()
+				if err := yaml.NewEncoder(f).Encode(provisioners.DefaultProvisioners); err != nil {
+					return errors.Wrap(err, "failed to write empty project state")
+				}
+				slog.Info("Created default provisioners file", "file", defaultProvisioners)
+			}
+		} else {
+			slog.Info("Skipping creation of default provisioners file since it already exists")
+		}
+
 		if _, err := os.Stat("score.yaml"); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
 				return errors.Wrapf(err, "failed to check for existing score.yaml")
@@ -203,7 +224,7 @@ var generateCmd = &cobra.Command{
 		}
 		slog.Info("Primed resources", "#workloads", len(state.Workloads), "#resources", len(state.Resources))
 
-		localProvisioners, err := loader.LoadProvisionersFromDirectory(".", loader.DefaultSuffix)
+		localProvisioners, err := loader.LoadProvisionersFromDirectory(projectDirectory, loader.DefaultSuffix)
 		if err != nil {
 			return errors.Wrapf(err, "failed to load provisioners")
 		}
