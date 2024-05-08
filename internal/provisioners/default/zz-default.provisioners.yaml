@@ -69,8 +69,14 @@
     name: {{ .State.database }}
     database: {{ .State.database }}
     username: {{ .State.username }}
-    password: {{ .State.password }}
+    password: {{ encodeSecretRef "" .State.service "password" }}
   manifests: |
+    - apiVersion: v1
+      kind: Secret
+      metadata:
+        name: {{ .State.service }}
+      data:
+        password: {{ .State.password | b64enc }}
     - apiVersion: apps/v1
       kind: StatefulSet
       metadata:
@@ -98,7 +104,10 @@
               - name: POSTGRES_USER
                 value: {{ .State.username | quote }}
               - name: POSTGRES_PASSWORD
-                value: {{ .State.password | quote }}
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ .State.service }}
+                    key: password
               - name: POSTGRES_DB
                 value: {{ .State.database | quote }}
               volumeMounts:
@@ -138,18 +147,15 @@
     host: {{ .State.service }}
     port: 6379
     username: {{ .State.username }}
-    password: {{ .State.password }}
+    password: {{ encodeSecretRef "" .State.service "password" }}
   manifests: |
     - apiVersion: v1
-      kind: ConfigMap
+      kind: Secret
       metadata:
         name: {{ .State.service }}
       data:
-        redis.conf: |
-          requirepass {{ .State.password }}
-          port 6379
-          save 60 1
-          loglevel warning
+        password: {{ .State.password | b64enc }}
+        redis.conf: {{ printf "requirepass %s\nport 6379\nsave 60 1\nloglevel warning\n" .State.password | b64enc }}
     - apiVersion: apps/v1
       kind: StatefulSet
       metadata:
@@ -180,8 +186,11 @@
                 mountPath: /usr/local/etc/redis
             volumes:
             - name: config
-              configMap:
-                name: {{ .State.service }}
+              secret:
+                secretName: {{ .State.service }}
+                items:
+                - key: redis.conf
+                  path: redis.conf
         volumeClaimTemplates:
         - metadata:
             name: redis-data
