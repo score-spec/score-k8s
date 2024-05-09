@@ -8,15 +8,15 @@ import (
 
 func TestDecodeSecretReferences_nominal(t *testing.T) {
 	splits, refs, err := DecodeSecretReferences(
-		EncodeSecretReference("ns", "s1", "k1") + "thing" +
-			EncodeSecretReference("ns", "s2", "k2") +
-			EncodeSecretReference("ns", "s3", "k3"),
+		EncodeSecretReference("s1", "k1") + "thing" +
+			EncodeSecretReference("s2", "k2") +
+			EncodeSecretReference("s3", "k3"),
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"", "thing", "", ""}, splits)
 	assert.Equal(t, []SecretRef{
-		{Namespace: "ns", Name: "s1", Key: "k1"},
-		{Namespace: "ns", Name: "s2", Key: "k2"},
-		{Namespace: "ns", Name: "s3", Key: "k3"},
+		{Name: "s1", Key: "k1"},
+		{Name: "s2", Key: "k2"},
+		{Name: "s3", Key: "k3"},
 	}, refs)
 }

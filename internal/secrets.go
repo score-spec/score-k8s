@@ -13,17 +13,15 @@ const (
 	magicSuffix = "💬🔐"
 )
 
-func EncodeSecretReference(namespace, secret, key string) string {
-	return magicPrefix + base64.RawURLEncoding.EncodeToString([]byte(namespace)) +
-		"." + base64.RawURLEncoding.EncodeToString([]byte(secret)) +
+func EncodeSecretReference(secret, key string) string {
+	return magicPrefix + base64.RawURLEncoding.EncodeToString([]byte(secret)) +
 		"." + base64.RawURLEncoding.EncodeToString([]byte(key)) +
 		magicSuffix
 }
 
 type SecretRef struct {
-	Namespace string
-	Name      string
-	Key       string
+	Name string
+	Key  string
 }
 
 // DecodeSecretReferences resolves a string in a kubernetes manifest that may contain secret references into a
@@ -40,22 +38,17 @@ func DecodeSecretReferences(source string) ([]string, []SecretRef, error) {
 			r := part[:si]
 			parts[1+i] = part[si+len(magicSuffix):]
 			bits := strings.Split(r, ".")
-			if len(bits) != 3 {
-				return nil, nil, errors.Errorf("invalid secret ref: more than 3 parts")
+			if len(bits) != 2 {
+				return nil, nil, errors.Errorf("invalid secret ref: more than 2 parts")
 			}
 			out := SecretRef{}
 			if r, err := base64.RawURLEncoding.DecodeString(bits[0]); err != nil {
 				return nil, nil, errors.Errorf("invalid secret ref: failed to decode parts.0")
 			} else {
-				out.Namespace = string(r)
+				out.Name = string(r)
 			}
 			if r, err := base64.RawURLEncoding.DecodeString(bits[1]); err != nil {
 				return nil, nil, errors.Errorf("invalid secret ref: failed to decode parts.1")
-			} else {
-				out.Name = string(r)
-			}
-			if r, err := base64.RawURLEncoding.DecodeString(bits[2]); err != nil {
-				return nil, nil, errors.Errorf("invalid secret ref: failed to decode parts.2")
 			} else {
 				out.Key = string(r)
 			}

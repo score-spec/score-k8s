@@ -6,6 +6,14 @@
 
 ![workflow diagram](workflow.drawio.png)
 
+1. The user runs `score-k8s init` in their project to initialise the empty state and default provisioners
+
+    1b. The user can import, copy, or download a custom set of extended resource provisioners that they or their platform team have developed specific to the target cluster.
+
+2. The user runs `score-k8s generate` to add Score files to the project and generate a `manifests.yaml` file.
+3. Iterate by changing the score files, and re-running `generate`.
+4. The manifests can then be validated and deployed through `kubectl apply`.
+
 ## Score overview
 
 Score aims to improve developer productivity and experience by reducing the risk of configuration inconsistencies between local and remote environments. It provides developer-centric workload specification (`score.yaml`) which captures a workloads runtime requirements in a platform-agnostic manner. Learn more [here](https://github.com/score-spec/spec#-what-is-score).
@@ -56,13 +64,9 @@ resources:
 
 Provisioners are loaded from any `*.provisioners.yaml` files in the local `.score-k8s` directory, and matched to the resources by the `type` and optional `class` and `id` fields. Matches are performed with a first-match policy, so default provisioners can be overridden by supplying a custom provisioner with the same `type`.
 
-A common workflow may be:
+Generally, users will want to copy in the provisioners files that work with their cluster. For example, if the cluster has postgres or mysql operators installed, then
 
-1. `score-k8s init` to initialize the state directory if it doesn't exist already
-2. `curl https://my-team.my-org.example.org/score-k8s-custom-provisioners.yaml > .score-k8s/custom.provisioners.yaml` to import or copy your team's custom provisioners file
-3. Optionally, `rm .score-k8s/zz-default.provisioners.yaml` to remove the default provisioners (a good idea in production).
-4. `score-k8s generate score.yaml`
-5. `kubectl apply -f manifests.yaml`
+For details of how the standard "template" provisioner works, see the `template://example-provisioners/example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml).
 
 ## FAQ
 

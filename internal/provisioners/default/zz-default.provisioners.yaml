@@ -1,3 +1,40 @@
+# This example provisioner is a fake resource type used to demonstrate the template provisioner mechanism.
+- uri: template://example-provisioners/example-provisioner
+  # (Required) Which resource type to match
+  type: example-provisioner-resource
+  # (Optional) Which 'class' of the resource. Blank will match any class, a non-empty value like 'default' will match
+  # only resources of that class.
+  class: ""
+  # (Optional) The exact resource id to match. Blank will match any resource, a non-empty value will only match
+  # the resource with exact same id.
+  id: ""
+  # (Optional) The init template sets the initial context values on each provision request. This is a text template
+  # that must evaluate to a YAML/JSON key-value map.
+  init: |
+    key: value
+    # sprig functions are also supported
+    key2: {{ print "value" | upper }}
+  # (Optional) The state template gets evaluated next and sets the internal state of this resource based on the previous
+  # state and the init context. Like init, this evaluates to a YAML/JSON object. This is the template that allows
+  # state to be stored between each generate call.
+  state: |
+    state-key: {{ .Init.key }} # will copy the value from init
+    state-key2: {{ default 0 .State.state-key2 | add 1 }} # will increment on each provision attempt
+  # (Optional) The shared state template is like state, but is a key-value structure shared between all resources.
+  # This can be used to coordinate shared resources and state between resources of the same or related types.
+  shared: |
+    section:
+      key: {{ .Shared.foo }}
+  # (Optional) The outputs template gets evaluated last and translates into the outputs available as placeholder
+  # references like ${resources.my-resource.key}.
+  outputs: |
+    plaintext: my-value
+    nested:
+      example: thing
+    # Instead of returning secret outputs as plaintext. They can be embedded as reference to Kubernetes Secrets. When
+    # these are detected, they can be used in environment variables or file contents securely.
+    secret-reference: {{ encodeSecretRef "my-secret" "my-key" }}
+
 # As an example we have a 'volume' type which returns an emptyDir volume.
 # In production or for real applications you may want to replace this with a provisioner for a tmpfs, host path, or
 # persistent volume and claims.
@@ -69,7 +106,7 @@
     name: {{ .State.database }}
     database: {{ .State.database }}
     username: {{ .State.username }}
-    password: {{ encodeSecretRef "" .State.service "password" }}
+    password: {{ encodeSecretRef .State.service "password" }}
   manifests: |
     - apiVersion: v1
       kind: Secret
@@ -113,6 +150,15 @@
               volumeMounts:
               - name: pv-data
                 mountPath: /var/lib/postgresql/data
+              readinessProbe:
+                exec:
+                  command: 
+                  - pg_isready
+                  - -U
+                  - {{ .State.username | quote }}
+                  - -d
+                  - {{ .State.database | quote }}
+                periodSeconds: 3
         volumeClaimTemplates:
         - metadata:
             name: pv-data
@@ -147,7 +193,7 @@
     host: {{ .State.service }}
     port: 6379
     username: {{ .State.username }}
-    password: {{ encodeSecretRef "" .State.service "password" }}
+    password: {{ encodeSecretRef .State.service "password" }}
   manifests: |
     - apiVersion: v1
       kind: Secret
@@ -184,6 +230,12 @@
                 mountPath: /data
               - name: config
                 mountPath: /usr/local/etc/redis
+              readinessProbe:
+                exec:
+                  command: 
+                  - redis-cli
+                  - ping
+                periodSeconds: 3
             volumes:
             - name: config
               secret:
