@@ -1,0 +1,37 @@
+name: release
+
+on: [push]
+
+permissions:
+  contents: read
+
+jobs:
+  
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      -
+        name: Fetch all tags
+        run: git fetch --force --tags
+      -
+        name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
+      -
+        name: Run Go Tests
+        run: go test ./... -cover -race
+      -
+        name: Build binary
+        run: go build -o score-k8s ./
+      -
+        name: Install license check tool
+        run: go install github.com/google/addlicense@latest
+      -
+        name: Check licenses
+        run: addlicense -l apache -check -v -ignore '**/*.yaml' -c Humanitec ./cmd ./internal/
