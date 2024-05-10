@@ -69,6 +69,70 @@ Generally, users will want to copy in the provisioners files that work with thei
 
 For details of how the standard "template" provisioner works, see the `template://example-provisioners/example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml).
 
+## Usage
+
+### Init
+
+```
+$ score-k8s init --help
+The init subcommand will prepare the current directory for working with score-compose and write the initial
+empty state and default provisioners file into the '.score-k8s' subdirectory.
+
+The '.score-k8s' directory contains state that will be used to generate any Kubernetes resource manifests including
+potentially sensitive data and raw secrets, so this should not be checked into generic source control.
+
+Usage:
+  score-k8s init [flags]
+
+Examples:
+
+  # Initialise a new score-k8s project
+  score-k8s init
+
+Flags:
+  -f, --file string   The score file to initialize (default "score.yaml")
+  -h, --help          help for init
+      --no-sample     Disable generation of the sample score file
+```
+
+### Generate
+
+```
+$ score-k8s generate --help
+The generate command will convert Score files in the current Score state into a combined set of Kubernetes
+manifests. All resources and links between Workloads will be resolved and provisioned as required.
+
+"score-compose init" MUST be run first. An error will be thrown if the project directory is not present.
+
+Usage:
+  score-k8s generate [flags]
+
+Examples:
+
+  # Specify Score files
+  score-k8s generate score.yaml *.score.yaml
+
+  # Regenerate without adding new score files
+  score-k8s generate
+
+  # Provide a default container image for any containers with image=.
+  score-k8s generate score.yaml --image=nginx:latest
+
+  # Provide overrides when one score file is provided
+  score-k8s generate score.yaml --override-file=./overrides.score.yaml --override-property=metadata.key=value
+
+  # Patch resulting manifests
+  score-k8s generate score.yaml --patch-manifests */*/metadata.annotations.key=value --patch-manifests Deployment/foo/spec.replicas=4
+
+Flags:
+  -h, --help                            help for generate
+      --image string                    An optional container image to use for any container with image == '.'
+  -o, --output string                   The output manifests file to write the manifests to (default "manifests.yaml")
+      --override-property stringArray   An optional set of path=key overrides to set or remove
+      --overrides-file string           An optional file of Score overrides to merge in
+      --patch-manifests stringArray     An optional set of <kind|*>/<name|*>/path=key operations for the output manifests
+```
+
 ## FAQ
 
 ### Why are there so few default resource provisioners?

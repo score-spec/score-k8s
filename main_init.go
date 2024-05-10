@@ -31,8 +31,8 @@ The '.score-k8s' directory contains state that will be used to generate any Kube
 potentially sensitive data and raw secrets, so this should not be checked into generic source control.
 `,
 	Example: `
-# Initialise a new score-k8s project
-score-k8s init`,
+  # Initialise a new score-k8s project
+  score-k8s init`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
