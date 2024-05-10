@@ -10,9 +10,10 @@
 
     1b. The user can import, copy, or download a custom set of extended resource provisioners that they or their platform team have developed specific to the target cluster.
 
-2. The user runs `score-k8s generate` to add Score files to the project and generate a `manifests.yaml` file.
+2. The user runs `score-k8s generate` to add Score files to the project and generate a `manifests.yaml` file. Multiple score files can be added and the resulting manifests will include all workloads and all resources together.
 3. Iterate by changing the score files, and re-running `generate`.
-4. The manifests can then be validated and deployed through `kubectl apply`.
+4. The manifests can then be validated and deployed through `kubectl apply -f manifests.yaml`.
+5. To remove the resources from the cluster, the same `kubectl delete -f manifests.yaml` can be used.
 
 ## Score overview
 
@@ -88,6 +89,7 @@ The provisioner files are loaded in lexicographic order, the `zz` prefix helps t
 
 1. Scale up in-cluster after deployment (`kubectl scale --replicas=3 deployment/my-workload`).
 2. Or, use a [Kustomize](https://kustomize.io/) patch to override the number of replicas with `kubectl apply -k`.
+3. Or, use the `--patch-manifests` CLI option to do `--patch-manifests 'Deployment/my-workload/spec.replicas=3'`.
 
 ### Which namespace will manifests be deployed into?
 

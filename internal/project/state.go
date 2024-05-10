@@ -16,12 +16,12 @@ const (
 	StateFileName                 = "state.yaml"
 )
 
-type StateExtras struct {
+type ResourceExtras struct {
 	// Don't actually persist these manifests, we just hold them here so we can pass them around.
 	Manifests []map[string]interface{} `yaml:"-"`
 }
 
-type State = framework.State[StateExtras, framework.NoExtras]
+type State = framework.State[framework.NoExtras, framework.NoExtras, ResourceExtras]
 
 // The StateDirectory holds the local state of the score-compose project, including any configuration, extensions,
 // plugins, or resource provisioning state when possible.

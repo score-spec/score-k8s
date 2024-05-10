@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -16,8 +15,24 @@ import (
 	"github.com/score-spec/score-k8s/internal/provisioners/default"
 )
 
+const (
+	initCmdFileFlag         = "file"
+	initCmdFileNoSampleFlag = "no-sample"
+)
+
 var initCmd = &cobra.Command{
-	Use:           "init",
+	Use:   "init",
+	Args:  cobra.NoArgs,
+	Short: "Initialise a new score-k8s project with local state directory and sample score file",
+	Long: `The init subcommand will prepare the current directory for working with score-compose and write the initial
+empty state and default provisioners file into the '.score-k8s' subdirectory.
+
+The '.score-k8s' directory contains state that will be used to generate any Kubernetes resource manifests including
+potentially sensitive data and raw secrets, so this should not be checked into generic source control.
+`,
+	Example: `
+# Initialise a new score-k8s project
+score-k8s init`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
@@ -26,19 +41,18 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			return errors.Wrap(err, "failed to load existing state directory")
 		} else if ok {
-			slog.Info(fmt.Sprintf("Found existing state directory '%s'", sd.Path))
+			slog.Info("Found existing state directory", "dir", sd.Path)
 		} else {
-			slog.Info(fmt.Sprintf("Writing new state directory '%s'", project.DefaultRelativeStateDirectory))
+			slog.Info("Writing new state directory", "dir", project.DefaultRelativeStateDirectory)
 			sd = &project.StateDirectory{
 				Path: project.DefaultRelativeStateDirectory,
 				State: project.State{
 					Workloads:   map[string]framework.ScoreWorkloadState[framework.NoExtras]{},
-					Resources:   map[framework.ResourceUid]framework.ScoreResourceState{},
+					Resources:   map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{},
 					SharedState: map[string]interface{}{},
-					Extras:      project.StateExtras{},
 				},
 			}
-			slog.Info(fmt.Sprintf("Writing new state directory '%s'", sd.Path))
+			slog.Info("Writing new state directory", "dir", sd.Path)
 			if err := sd.Persist(); err != nil {
 				return errors.Wrap(err, "failed to persist new state directory")
 			}
@@ -57,40 +71,45 @@ var initCmd = &cobra.Command{
 			}
 			slog.Info("Created default provisioners file", "file", defaultProvisioners)
 		} else {
-			slog.Info("Skipping creation of default provisioners file since it already exists")
+			slog.Info("Skipping creation of default provisioners file since it already exists", "file", defaultProvisioners)
 		}
 
-		if _, err := os.Stat("score.yaml"); err != nil {
+		initCmdScoreFile, _ := cmd.Flags().GetString(initCmdFileFlag)
+		if _, err := os.Stat(initCmdScoreFile); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
-				return errors.Wrapf(err, "failed to check for existing score.yaml")
+				return errors.Wrap(err, "failed to check for existing Score file")
 			}
-			workload := &scoretypes.Workload{
-				ApiVersion: "score.dev/v1b1",
-				Metadata: map[string]interface{}{
-					"name": "example",
-				},
-				Containers: map[string]scoretypes.Container{
-					"main": {
-						Image: "stefanprodan/podinfo",
-					},
-				},
-				Service: &scoretypes.WorkloadService{
-					Ports: map[string]scoretypes.ServicePort{
-						"web": {Port: 8080},
-					},
-				},
-			}
-			if f, err := os.OpenFile("score.yaml", os.O_CREATE|os.O_WRONLY, 0600); err != nil {
-				return errors.Wrap(err, "failed to open empty score.yaml file")
+			if v, _ := cmd.Flags().GetBool(initCmdFileNoSampleFlag); v {
+				slog.Info("Initial Score file does not exist - and sample generation is disabled", "file", initCmdScoreFile)
 			} else {
-				defer f.Close()
-				if err := yaml.NewEncoder(f).Encode(workload); err != nil {
-					return errors.Wrap(err, "failed to write empty score.yaml file")
+				workload := &scoretypes.Workload{
+					ApiVersion: "score.dev/v1b1",
+					Metadata: map[string]interface{}{
+						"name": "example",
+					},
+					Containers: map[string]scoretypes.Container{
+						"main": {
+							Image: "stefanprodan/podinfo",
+						},
+					},
+					Service: &scoretypes.WorkloadService{
+						Ports: map[string]scoretypes.ServicePort{
+							"web": {Port: 8080},
+						},
+					},
 				}
-				slog.Info("Created empty score.yaml file", "file", "score.yaml")
+				if f, err := os.OpenFile(initCmdScoreFile, os.O_CREATE|os.O_WRONLY, 0600); err != nil {
+					return errors.Wrap(err, "failed to open empty Score file")
+				} else {
+					defer f.Close()
+					if err := yaml.NewEncoder(f).Encode(workload); err != nil {
+						return errors.Wrap(err, "failed to write Score file")
+					}
+					slog.Info("Created initial Score file", "file", initCmdScoreFile)
+				}
 			}
 		} else {
-			slog.Info("Skipping creation of score.yaml file since it already exists")
+			slog.Info("Skipping creation of initial Score file since it already exists", "file", initCmdScoreFile)
 		}
 
 		return nil
@@ -98,5 +117,8 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
+	initCmd.Flags().StringP(initCmdFileFlag, "f", "score.yaml", "The score file to initialize")
+	initCmd.Flags().Bool(initCmdFileNoSampleFlag, false, "Disable generation of the sample score file")
+
 	rootCmd.AddCommand(initCmd)
 }

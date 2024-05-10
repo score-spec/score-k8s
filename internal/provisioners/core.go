@@ -35,6 +35,8 @@ import (
 type Input struct {
 	// -- aspects from the resource declaration --
 
+	// Guid is a random uuid generated the first time this resource is added to the project.
+	ResourceGuid     string                 `json:"resource_guid"`
 	ResourceUid      string                 `json:"resource_uid"`
 	ResourceType     string                 `json:"resource_type"`
 	ResourceClass    string                 `json:"resource_class"`
@@ -156,12 +158,11 @@ func (po *ProvisionOutput) ApplyToStateAndProject(state *project.State, resUid f
 		out.SharedState = util.PatchMap(state.SharedState, po.SharedState)
 	}
 
-	if out.Extras.Manifests == nil {
-		out.Extras.Manifests = make([]map[string]interface{}, 0)
-	}
-
+	// Manifests must also always be updated.
 	if len(po.Manifests) > 0 {
-		out.Extras.Manifests = append(out.Extras.Manifests, po.Manifests...)
+		existing.Extras.Manifests = po.Manifests
+	} else {
+		existing.Extras.Manifests = make([]map[string]interface{}, 0)
 	}
 
 	out.Resources[resUid] = existing
@@ -237,6 +238,7 @@ func ProvisionResources(ctx context.Context, state *project.State, provisioners 
 		}
 
 		output, err := provisioner.Provision(ctx, &Input{
+			ResourceGuid:     resState.Guid,
 			ResourceUid:      string(resUid),
 			ResourceType:     resUid.Type(),
 			ResourceClass:    resUid.Class(),

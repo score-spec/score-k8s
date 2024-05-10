@@ -13,11 +13,12 @@ import (
 	machineryMeta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/score-spec/score-k8s/internal"
+	"github.com/score-spec/score-k8s/internal/project"
 )
 
 func convertContainerVolume(
 	index int, volume scoretypes.ContainerVolumesElem,
-	resources map[framework.ResourceUid]framework.ScoreResourceState,
+	resources map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras],
 	substitutionFunc func(string) (string, error),
 ) (coreV1.VolumeMount, *coreV1.Volume, *coreV1.PersistentVolumeClaim, error) {
 	volName := fmt.Sprintf("vol-%d", index)

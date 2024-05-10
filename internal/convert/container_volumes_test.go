@@ -11,19 +11,20 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/score-spec/score-k8s/internal"
+	"github.com/score-spec/score-k8s/internal/project"
 )
 
 func Test_convertContainerVolume_not_found(t *testing.T) {
 	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
 		Source: "unknown",
-	}, map[framework.ResourceUid]framework.ScoreResourceState{}, nil)
+	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{}, nil)
 	assert.EqualError(t, err, "source: resource 'unknown' does not exist")
 }
 
 func Test_convertContainerVolume_no_outputs(t *testing.T) {
 	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
 		Source: "volume.default#my-workload.thing",
-	}, map[framework.ResourceUid]framework.ScoreResourceState{
+	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"volume.default#my-workload.thing": {
 			Outputs: map[string]interface{}{},
 		},
@@ -34,7 +35,7 @@ func Test_convertContainerVolume_no_outputs(t *testing.T) {
 func Test_convertContainerVolume_empty_source(t *testing.T) {
 	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
 		Source: "volume.default#my-workload.thing",
-	}, map[framework.ResourceUid]framework.ScoreResourceState{
+	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"volume.default#my-workload.thing": {
 			Outputs: map[string]interface{}{
 				"source": map[string]interface{}{},
@@ -47,7 +48,7 @@ func Test_convertContainerVolume_empty_source(t *testing.T) {
 func Test_convertContainerVolume_bad_source(t *testing.T) {
 	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
 		Source: "volume.default#my-workload.thing",
-	}, map[framework.ResourceUid]framework.ScoreResourceState{
+	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"volume.default#my-workload.thing": {
 			Outputs: map[string]interface{}{
 				"source": map[string]interface{}{
@@ -64,7 +65,7 @@ func Test_convertContainerVolume_bad_source(t *testing.T) {
 func Test_convertContainerVolume_bad_claim(t *testing.T) {
 	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
 		Source: "volume.default#my-workload.thing",
-	}, map[framework.ResourceUid]framework.ScoreResourceState{
+	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"volume.default#my-workload.thing": {
 			Outputs: map[string]interface{}{
 				"claimSpec": map[string]interface{}{
@@ -82,7 +83,7 @@ func Test_convertContainerVolume_nominal_source(t *testing.T) {
 		Source:   "volume.default#my-workload.thing",
 		ReadOnly: internal.Ref(true),
 		Path:     internal.Ref("sub"),
-	}, map[framework.ResourceUid]framework.ScoreResourceState{
+	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"volume.default#my-workload.thing": {
 			Outputs: map[string]interface{}{
 				"source": map[string]interface{}{
@@ -119,7 +120,7 @@ func Test_convertContainerVolume_nominal_claim(t *testing.T) {
 		Source:   "volume.default#my-workload.thing",
 		ReadOnly: internal.Ref(true),
 		Path:     internal.Ref("sub"),
-	}, map[framework.ResourceUid]framework.ScoreResourceState{
+	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"volume.default#my-workload.thing": {
 			Outputs: map[string]interface{}{
 				"claimSpec": map[string]interface{}{

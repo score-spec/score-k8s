@@ -93,5 +93,8 @@ func convertContainerVariables(variables scoretypes.ContainerVariables, substitu
 			}
 		}
 	}
+	slices.SortFunc(out, func(a, b coreV1.EnvVar) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 	return out, nil
 }

@@ -71,7 +71,7 @@ func Test_convertContainerFile_content_expand_mixed(t *testing.T) {
 		Content: internal.Ref("raw content with ${some.ref}"),
 		Target:  "/some/mount",
 	}, "my-workload-c1-", nil, func(s string) (string, error) {
-		return internal.EncodeSecretReference("ns", "default", "key"), nil
+		return internal.EncodeSecretReference("default", "key"), nil
 	})
 	assert.EqualError(t, err, "content: contained a mix of secret references and raw content")
 }
@@ -81,7 +81,7 @@ func Test_convertContainerFile_content_expand_with_secret(t *testing.T) {
 		Content: internal.Ref("${some.ref}"),
 		Target:  "/some/mount",
 	}, "my-workload-c1-", nil, func(s string) (string, error) {
-		return internal.EncodeSecretReference("ns", "default", "key"), nil
+		return internal.EncodeSecretReference("default", "key"), nil
 	})
 	assert.Equal(t, coreV1.VolumeMount{
 		Name:      "file-0",
