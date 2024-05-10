@@ -67,7 +67,7 @@ Provisioners are loaded from any `*.provisioners.yaml` files in the local `.scor
 
 Generally, users will want to copy in the provisioners files that work with their cluster. For example, if the cluster has postgres or mysql operators installed, then
 
-For details of how the standard "template" provisioner works, see the `template://example-provisioners/example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml).
+For details of how the standard "template" provisioner works, see the `template://example-provisioners/example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml). For details of how the standard "cmd" provisioner works, see the `cmd://bash#example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml).
 
 ## Usage
 

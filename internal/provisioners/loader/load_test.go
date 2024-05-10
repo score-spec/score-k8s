@@ -34,7 +34,7 @@ func TestLoadProvisioners(t *testing.T) {
 		assert.Len(t, p, 0)
 	})
 
-	t.Run("nominal", func(t *testing.T) {
+	t.Run("nominal template", func(t *testing.T) {
 		p, err := LoadProvisioners([]byte(`
 - uri: template://example
   type: thing
@@ -42,6 +42,20 @@ func TestLoadProvisioners(t *testing.T) {
   id: specific
   state: |
     number: {{ 1 }}
+`))
+		require.NoError(t, err)
+		assert.Len(t, p, 1)
+		assert.Equal(t, "template://example", p[0].Uri())
+		assert.True(t, p[0].Match(framework.NewResourceUid("w", "r", "thing", nil, internal.Ref("specific"))))
+	})
+
+	t.Run("nominal cmd", func(t *testing.T) {
+		p, err := LoadProvisioners([]byte(`
+- uri: cmd://my-binary
+  type: thing
+  class: default
+  id: specific
+  args: ["first", "second"]
 `))
 		require.NoError(t, err)
 		assert.Len(t, p, 1)

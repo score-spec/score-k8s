@@ -1,4 +1,5 @@
-# This example provisioner is a fake resource type used to demonstrate the template provisioner mechanism.
+# This example provisioner is a fake resource type used to demonstrate the template provisioner mechanism. The URI should
+# be a unique indicator of the provisioner. The scheme indicates how it is executed.
 - uri: template://example-provisioners/example-provisioner
   # (Required) Which resource type to match
   type: example-provisioner-resource
@@ -48,6 +49,16 @@
           k8s.score.dev/resource-guid: {{ .Guid }}
       data:
         key: {{ .Init.key }}
+
+# The 'cmd' scheme has a "host" + path component that indicates the path to the binary to execute. If the host starts
+# with "." it is interpreted as a relative path, if it starts with "~" it resolves to the home directory.
+- uri: cmd://bash#example-provisioner
+  type: example-provisioner-resource
+  class: default
+  id: specific
+  # (Optional) additional args that the binary gets run with
+  # If any of the args are '<mode>' it will be replaced with "provision"
+  args: ["-c", "echo '{\"resource_outputs\":{\"key\":\"value\"},\"manifests\":[]}'"]
 
 # As an example we have a 'volume' type which returns an emptyDir volume.
 # In production or for real applications you may want to replace this with a provisioner for a tmpfs, host path, or
