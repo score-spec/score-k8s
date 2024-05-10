@@ -1,0 +1,42 @@
+# Check the documentation at https://goreleaser.com
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - id: score-k8s
+    binary: score-k8s
+    main: ./
+    ldflags:
+      - -X github.com/score-spec/score-k8s/internal/version.Version={{ .Version }}
+    env:
+      - CGO_ENABLED=0
+    targets:
+      - linux_amd64_v1
+      - linux_arm64
+      - windows_amd64_v1
+      - darwin_amd64_v1
+      - darwin_arm64
+archives:
+  - format_overrides:
+    - goos: windows
+      format: zip
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+brews:
+  - name: score-k8s
+    homepage: "https://score.dev"
+    tap:
+      owner: score-spec
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: rachfop
+      email: prachford@icloud.com
