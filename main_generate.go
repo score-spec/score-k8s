@@ -121,7 +121,7 @@ manifests. All resources and links between Workloads will be resolved and provis
 				if container.Image == "." {
 					if v, _ := cmd.Flags().GetString(generateCmdImageFlag); v != "" {
 						container.Image = v
-						slog.Info("Set container image for container '%s' to %s from --%s", containerName, v, generateCmdImageFlag)
+						slog.Info(fmt.Sprintf("Set container image for container '%s' to %s from --%s", containerName, v, generateCmdImageFlag))
 						workload.Containers[containerName] = container
 					}
 				}
