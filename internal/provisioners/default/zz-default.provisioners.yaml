@@ -36,6 +36,18 @@
     # Instead of returning secret outputs as plaintext. They can be embedded as reference to Kubernetes Secrets. When
     # these are detected, they can be used in environment variables or file contents securely.
     secret-reference: {{ encodeSecretRef "my-secret" "my-key" }}
+  # (Optional) The manifests template gets evaluated as a list of Kubernetes object manifests to be added to the output.
+  manifests: |
+    - apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: {{ .Uid }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+      data:
+        key: {{ .Init.key }}
 
 # As an example we have a 'volume' type which returns an emptyDir volume.
 # In production or for real applications you may want to replace this with a provisioner for a tmpfs, host path, or
