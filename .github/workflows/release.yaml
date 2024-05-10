@@ -34,4 +34,4 @@ jobs:
         run: go install github.com/google/addlicense@latest
       -
         name: Check licenses
-        run: addlicense -l apache -check -v -ignore '**/*.yaml' -c Humanitec ./cmd ./internal/
+        run: addlicense -l apache -check -v -ignore '**/*.yaml' -c Humanitec ./*.go ./internal/
