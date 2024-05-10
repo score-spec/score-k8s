@@ -3,12 +3,12 @@
 - uri: template://example-provisioners/example-provisioner
   # (Required) Which resource type to match
   type: example-provisioner-resource
-  # (Optional) Which 'class' of the resource. Blank will match any class, a non-empty value like 'default' will match
+  # (Optional) Which 'class' of the resource. Null will match any class, a non-empty value like 'default' will match
   # only resources of that class.
-  class: ""
-  # (Optional) The exact resource id to match. Blank will match any resource, a non-empty value will only match
+  class: null
+  # (Optional) The exact resource id to match. Null will match any resource, a non-empty value will only match
   # the resource with exact same id.
-  id: ""
+  id: null
   # (Optional) The init template sets the initial context values on each provision request. This is a text template
   # that must evaluate to a YAML/JSON key-value map.
   init: |
@@ -21,8 +21,8 @@
   # state and the init context. Like init, this evaluates to a YAML/JSON object. This is the template that allows
   # state to be stored between each generate call.
   state: |
-    state-key: {{ .Init.key }} # will copy the value from init
-    state-key2: {{ default 0 .State.state-key2 | add 1 }} # will increment on each provision attempt
+    stateKey: {{ .Init.key }} # will copy the value from init
+    stateKey2: {{ default 0 .State.stateKey2 | add 1 }} # will increment on each provision attempt
   # (Optional) The shared state template is like state, but is a key-value structure shared between all resources.
   # This can be used to coordinate shared resources and state between resources of the same or related types.
   shared: |

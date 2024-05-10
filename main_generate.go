@@ -137,6 +137,8 @@ manifests. All resources and links between Workloads will be resolved and provis
 						container.Image = v
 						slog.Info(fmt.Sprintf("Set container image for container '%s' to %s from --%s", containerName, v, generateCmdImageFlag))
 						workload.Containers[containerName] = container
+					} else {
+						return errors.Errorf("failed to convert '%s' because container '%s' has no image and --image was not provided", arg, containerName)
 					}
 				}
 			}
