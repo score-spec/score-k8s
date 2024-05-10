@@ -39,6 +39,9 @@ func TestApplyToStateAndProject(t *testing.T) {
 		assert.Equal(t, framework.ScoreResourceState[project.ResourceExtras]{
 			State:   map[string]interface{}{},
 			Outputs: map[string]interface{}{},
+			Extras: project.ResourceExtras{
+				Manifests: make([]map[string]interface{}, 0),
+			},
 		}, afterState.Resources[resUid])
 	})
 

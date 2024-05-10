@@ -74,6 +74,10 @@
       kind: HTTPRoute
       metadata:
         name: {{ .State.routeName }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
       spec:
         parentRefs:
         - name: default
@@ -112,12 +116,20 @@
       kind: Secret
       metadata:
         name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
       data:
         password: {{ .State.password | b64enc }}
     - apiVersion: apps/v1
       kind: StatefulSet
       metadata:
         name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
       spec:
         replicas: 1
         serviceName: {{ .State.service }}
@@ -130,6 +142,10 @@
             labels:
               scoreWorkload: {{ .SourceWorkload }}
               app: {{ .State.service }}
+            annotations:
+              k8s.score.dev/source-workload: {{ .SourceWorkload }}
+              k8s.score.dev/resource-uid: {{ .Uid }}
+              k8s.score.dev/resource-guid: {{ .Guid }}
           spec:
             containers:
             - name: postgres-db
@@ -162,6 +178,10 @@
         volumeClaimTemplates:
         - metadata:
             name: pv-data
+            annotations:
+              k8s.score.dev/source-workload: {{ .SourceWorkload }}
+              k8s.score.dev/resource-uid: {{ .Uid }}
+              k8s.score.dev/resource-guid: {{ .Guid }}
           spec:
             accessModes: ["ReadWriteOnce"]
             resources:
@@ -171,6 +191,10 @@
       kind: Service
       metadata:
         name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
       spec:
         selector:
           scoreWorkload: {{ .SourceWorkload }}
@@ -199,6 +223,10 @@
       kind: Secret
       metadata:
         name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
       data:
         password: {{ .State.password | b64enc }}
         redis.conf: {{ printf "requirepass %s\nport 6379\nsave 60 1\nloglevel warning\n" .State.password | b64enc }}
@@ -206,6 +234,10 @@
       kind: StatefulSet
       metadata:
         name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
       spec:
         replicas: 1
         serviceName: {{ .State.service }}
@@ -218,6 +250,10 @@
             labels:
               scoreWorkload: {{ .SourceWorkload }}
               app: {{ .State.service }}
+            annotations:
+              k8s.score.dev/source-workload: {{ .SourceWorkload }}
+              k8s.score.dev/resource-uid: {{ .Uid }}
+              k8s.score.dev/resource-guid: {{ .Guid }}
           spec:
             containers:
             - name: redis
@@ -246,6 +282,10 @@
         volumeClaimTemplates:
         - metadata:
             name: redis-data
+            annotations:
+              k8s.score.dev/source-workload: {{ .SourceWorkload }}
+              k8s.score.dev/resource-uid: {{ .Uid }}
+              k8s.score.dev/resource-guid: {{ .Guid }}
           spec:
             accessModes: ["ReadWriteOnce"]
             resources:
@@ -255,6 +295,10 @@
       kind: Service
       metadata:
         name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
       spec:
         selector:
           scoreWorkload: {{ .SourceWorkload }}

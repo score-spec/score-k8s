@@ -119,10 +119,18 @@ func renderTemplateAndDecode(raw string, data interface{}, out interface{}) erro
 
 // Data is the structure sent to each template during rendering.
 type Data struct {
-	Uid      string
-	Type     string
-	Class    string
-	Id       string
+	// Guid is a random uuid generated the first time this resource is added to the project.
+	Guid string
+
+	// Uid is the combined id like type.class#id
+	Uid string
+	// Type is always defined as the resource type
+	Type string
+	// Class is the resource class, it defaults to 'default'
+	Class string
+	// Id is the resource id, like 'global-id' or 'workload.res-name'
+	Id string
+
 	Params   map[string]interface{}
 	Metadata map[string]interface{}
 
@@ -139,6 +147,7 @@ func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) 
 
 	// The data payload that gets passed into each template
 	data := Data{
+		Guid:             input.ResourceGuid,
 		Uid:              input.ResourceUid,
 		Type:             input.ResourceType,
 		Class:            input.ResourceClass,

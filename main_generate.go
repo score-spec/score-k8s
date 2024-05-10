@@ -117,6 +117,7 @@ var generateCmd = &cobra.Command{
 		if state, err = state.WithPrimedResources(); err != nil {
 			return errors.Wrap(err, "failed to prime resources")
 		}
+
 		slog.Info("Primed resources", "#workloads", len(state.Workloads), "#resources", len(state.Resources))
 
 		localProvisioners, err := loader.LoadProvisionersFromDirectory(sd.Path, loader.DefaultSuffix)

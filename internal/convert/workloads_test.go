@@ -120,6 +120,8 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  annotations:
+    k8s.score.dev/workload-name: example
   creationTimestamp: null
   name: example
 spec:
@@ -134,6 +136,7 @@ spec:
   template:
     metadata:
       annotations:
+        k8s.score.dev/workload-name: example
         my.custom.scope/annotation: value
       creationTimestamp: null
       labels:

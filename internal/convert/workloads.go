@@ -135,6 +135,13 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		containers = append(containers, c)
 	}
 
+	// We want to apply the annotations from the workload onto the pod.
+	// See the doc of buildPodAnnotations for what gets included here.
+	podAnnotations := buildPodAnnotations(spec.Metadata)
+	topLevelAnnotations := map[string]string{
+		internal.AnnotationPrefix + "workload-name": workloadName,
+	}
+
 	if spec.Service != nil && len(spec.Service.Ports) > 0 {
 		portList := make([]coreV1.ServicePort, 0, len(spec.Service.Ports))
 		for portName, port := range spec.Service.Ports {
@@ -157,7 +164,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			TypeMeta: machineryMeta.TypeMeta{Kind: "Service", APIVersion: "v1"},
 			ObjectMeta: machineryMeta.ObjectMeta{
 				Name:        WorkloadServiceName(workloadName),
-				Annotations: make(map[string]string),
+				Annotations: topLevelAnnotations,
 			},
 			Spec: coreV1.ServiceSpec{
 				Selector: map[string]string{
@@ -168,17 +175,13 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		})
 	}
 
-	// We want to apply the annotations from the workload onto the pod.
-	// See the doc of buildPodAnnotations for what gets included here.
-	k8sAnnotations := buildPodAnnotations(spec.Metadata)
-
 	switch kind {
 	case WorkloadKindDeployment:
 		manifests = append(manifests, &v1.Deployment{
 			TypeMeta: machineryMeta.TypeMeta{Kind: WorkloadKindDeployment, APIVersion: "apps/v1"},
 			ObjectMeta: machineryMeta.ObjectMeta{
 				Name:        workloadName,
-				Annotations: make(map[string]string),
+				Annotations: topLevelAnnotations,
 			},
 			Spec: v1.DeploymentSpec{
 				Replicas: internal.Ref(int32(1)),
@@ -192,7 +195,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 						Labels: map[string]string{
 							SelectorLabelWorkloadName: workloadName,
 						},
-						Annotations: k8sAnnotations,
+						Annotations: podAnnotations,
 					},
 					Spec: coreV1.PodSpec{
 						Containers: containers,
@@ -209,7 +212,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			TypeMeta: machineryMeta.TypeMeta{Kind: "Service", APIVersion: "v1"},
 			ObjectMeta: machineryMeta.ObjectMeta{
 				Name:        headlessServiceName,
-				Annotations: make(map[string]string),
+				Annotations: topLevelAnnotations,
 			},
 			Spec: coreV1.ServiceSpec{
 				Selector: map[string]string{
@@ -224,7 +227,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			TypeMeta: machineryMeta.TypeMeta{Kind: WorkloadKindStatefulSet, APIVersion: "apps/v1"},
 			ObjectMeta: machineryMeta.ObjectMeta{
 				Name:        workloadName,
-				Annotations: make(map[string]string),
+				Annotations: topLevelAnnotations,
 			},
 			Spec: v1.StatefulSetSpec{
 				Replicas: internal.Ref(int32(1)),
@@ -239,7 +242,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 						Labels: map[string]string{
 							SelectorLabelWorkloadName: workloadName,
 						},
-						Annotations: k8sAnnotations,
+						Annotations: podAnnotations,
 					},
 					Spec: coreV1.PodSpec{
 						Containers: containers,
@@ -287,5 +290,6 @@ func buildPodAnnotations(metadata map[string]interface{}) map[string]string {
 			out[s] = v
 		}
 	}
+	out[internal.AnnotationPrefix+"workload-name"] = metadata["name"].(string)
 	return out
 }
