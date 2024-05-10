@@ -59,7 +59,7 @@ func TestLoadProvisioners(t *testing.T) {
 `))
 		require.NoError(t, err)
 		assert.Len(t, p, 1)
-		assert.Equal(t, "template://example", p[0].Uri())
+		assert.Equal(t, "cmd://my-binary", p[0].Uri())
 		assert.True(t, p[0].Match(framework.NewResourceUid("w", "r", "thing", nil, internal.Ref("specific"))))
 	})
 
