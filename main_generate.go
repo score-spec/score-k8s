@@ -31,10 +31,33 @@ const (
 	generateCmdOverridePropertyFlag = "override-property"
 	generateCmdImageFlag            = "image"
 	generateCmdOutputFlag           = "output"
+	generateCmdPatchManifestsFlag   = "patch-manifests"
 )
 
 var generateCmd = &cobra.Command{
-	Use:           "generate",
+	Use:   "generate",
+	Args:  cobra.ArbitraryArgs,
+	Short: "Convert one or more Score files into a set of Kubernetes manifests",
+	Long: `The generate command will convert Score files in the current Score state into a combined set of Kubernetes
+manifests. All resources and links between Workloads will be resolved and provisioned as required.
+
+"score-compose init" MUST be run first. An error will be thrown if the project directory is not present.
+`,
+	Example: `
+  # Specify Score files
+  score-k8s generate score.yaml *.score.yaml
+
+  # Regenerate without adding new score files
+  score-k8s generate
+
+  # Provide a default container image for any containers with image=.
+  score-k8s generate score.yaml --image=nginx:latest
+
+  # Provide overrides when one score file is provided
+  score-k8s generate score.yaml --override-file=./overrides.score.yaml --override-property=metadata.key=value
+
+  # Patch resulting manifests
+  score-k8s generate score.yaml --patch-manifests */*/metadata.annotations.key=value --patch-manifests Deployment/foo/spec.replicas=4`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
@@ -137,9 +160,7 @@ var generateCmd = &cobra.Command{
 		}
 		slog.Info("Persisted state file")
 
-		out := new(bytes.Buffer)
-		var outCount int
-
+		outputManifests := make([]map[string]interface{}, 0)
 		resIds, _ := state.GetSortedResourceUids()
 		for _, id := range resIds {
 			res := state.Resources[id]
@@ -148,14 +169,7 @@ var generateCmd = &cobra.Command{
 					if p, ok := internal.FindFirstUnresolvedSecretRef("", manifest); ok {
 						return errors.Errorf("unresolved secret ref in manifest: %s", p)
 					}
-					out.WriteString("---\n")
-					enc := yaml.NewEncoder(out)
-					enc.SetIndent(2)
-					if err := enc.Encode(manifest); err != nil {
-						return errors.Wrapf(err, "failed to recode")
-					}
-					out.WriteString("\n")
-					outCount += 1
+					outputManifests = append(outputManifests, manifest)
 				}
 				slog.Info(fmt.Sprintf("Wrote %d resource manifests to manifests buffer for resource '%s'", len(res.Extras.Manifests), id))
 			}
@@ -171,19 +185,30 @@ var generateCmd = &cobra.Command{
 				if err = internal.YamlSerializerInfo.Serializer.Encode(m.(runtime.Object), subOut); err != nil {
 					return errors.Wrapf(err, "workload: %s: failed to serialise manifest %s", workloadName, m.GetName())
 				}
-				var intermediate interface{}
+				var intermediate map[string]interface{}
 				_ = yaml.Unmarshal(subOut.Bytes(), &intermediate)
 				if p, ok := internal.FindFirstUnresolvedSecretRef("", intermediate); ok {
 					return errors.Errorf("unresolved secret ref in manifest: %s", p)
 				}
-				out.WriteString("---\n")
-				_, _ = subOut.WriteTo(out)
-				out.WriteString("\n")
-				outCount += 1
+				outputManifests = append(outputManifests, intermediate)
 			}
 			slog.Info(fmt.Sprintf("Wrote %d manifests to manifests buffer for workload '%s'", len(manifests), workloadName))
 		}
 
+		// patch manifests here
+		if v, _ := cmd.Flags().GetStringArray(generateCmdPatchManifestsFlag); len(v) > 0 {
+			for _, entry := range v {
+				if outputManifests, err = parseAndApplyManifestPatches(entry, generateCmdPatchManifestsFlag, outputManifests); err != nil {
+					return err
+				}
+			}
+		}
+
+		out := new(bytes.Buffer)
+		for _, manifest := range outputManifests {
+			out.WriteString("---\n")
+			_ = yaml.NewEncoder(out).Encode(manifest)
+		}
 		v, _ := cmd.Flags().GetString(generateCmdOutputFlag)
 		if v == "" {
 			return fmt.Errorf("no output file specified")
@@ -241,11 +266,54 @@ func parseAndApplyOverrideProperty(entry string, flagName string, spec map[strin
 	}
 }
 
+func parseAndApplyManifestPatches(entry string, flagName string, manifests []map[string]interface{}) ([]map[string]interface{}, error) {
+	parts := strings.SplitN(entry, "=", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("--%s '%s' is invalid, expected a =-separated path and value", flagName, entry)
+	}
+	filter := strings.SplitN(parts[0], "/", 3)
+	if len(filter) != 3 {
+		return nil, fmt.Errorf("--%s '%s' is invalid, expected the patch path to have an initial <kind>/<name>/... prefix", flagName, entry)
+	}
+	kindFilter, nameFilter, path := filter[0], filter[1], filter[2]
+	outManifests := slices.Clone(manifests)
+
+	for i, manifest := range manifests {
+		kind, kOk := manifest["kind"].(string)
+		meta, _ := manifest["metadata"].(map[string]interface{})
+		name, nOk := meta["name"].(string)
+		if (kindFilter == "*" || (kOk && kind == kindFilter)) && (nameFilter == "*" || (nOk && name == nameFilter)) {
+			if parts[1] == "" {
+				slog.Info(fmt.Sprintf("Overriding '%s' in manifest %s/%s", path, kind, name))
+				after, err := framework.OverridePathInMap(manifest, framework.ParseDotPathParts(path), true, nil)
+				if err != nil {
+					return nil, fmt.Errorf("--%s '%s' could not be applied to %s/%s: %w", flagName, entry, kind, name, err)
+				}
+				manifest = after
+			} else {
+				var value interface{}
+				if err := yaml.Unmarshal([]byte(parts[1]), &value); err != nil {
+					return nil, fmt.Errorf("--%s '%s' is invalid, failed to unmarshal value as yaml: %w", flagName, entry, err)
+				}
+				slog.Info(fmt.Sprintf("Overriding '%s' in manifest %s/%s", path, kind, name))
+				after, err := framework.OverridePathInMap(manifest, framework.ParseDotPathParts(path), false, value)
+				if err != nil {
+					return nil, fmt.Errorf("--%s '%s' could not be applied to %s/%s: %w", flagName, entry, kind, name, err)
+				}
+				manifest = after
+			}
+		}
+		outManifests[i] = manifest
+	}
+	return outManifests, nil
+}
+
 func init() {
 	generateCmd.Flags().StringP(generateCmdOutputFlag, "o", "manifests.yaml", "The output manifests file to write the manifests to")
 	generateCmd.Flags().String(generateCmdOverridesFileFlag, "", "An optional file of Score overrides to merge in")
 	generateCmd.Flags().StringArray(generateCmdOverridePropertyFlag, []string{}, "An optional set of path=key overrides to set or remove")
 	generateCmd.Flags().String(generateCmdImageFlag, "", "An optional container image to use for any container with image == '.'")
+	generateCmd.Flags().StringArray(generateCmdPatchManifestsFlag, []string{}, "An optional set of <kind|*>/<name|*>/path=key operations for the output manifests")
 
 	rootCmd.AddCommand(generateCmd)
 }

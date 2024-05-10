@@ -14,6 +14,8 @@
     key: value
     # sprig functions are also supported
     key2: {{ print "value" | upper }}
+    # other attributes are available such as Type, Class, Id, Uid, Guid.
+    my-uid: "{{ .Uid }}#{{ .Guid }}"
   # (Optional) The state template gets evaluated next and sets the internal state of this resource based on the previous
   # state and the init context. Like init, this evaluates to a YAML/JSON object. This is the template that allows
   # state to be stored between each generate call.
