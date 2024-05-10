@@ -194,3 +194,7 @@ And DNS resources can be accessed on http://<prefix>.localhost:8080, or using a 
 ```
 $ score-k8s resources get-outputs 'dns.default#demo-app.dns' --format '{{.host}}'
 ```
+
+### Once I have provisioned a resource, how do I delete it or clean it up?
+
+Resource cleanup has not been implemented yet. The only mechanism today is limited to deleting the Kubernetes manifests output by a template provisioner. As a workaround, the YAML structure in `.score-k8s/state.yaml` can be interpreted to determine what side effects need to be cleaned up.
