@@ -2,6 +2,7 @@ package convert
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -33,7 +34,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 	manifests := make([]machineryMeta.Object, 0, 1)
 
 	kind := WorkloadKindDeployment
-	if d, ok := internal.FindAnnotation[string](spec.Metadata, internal.WorkloadKindAnnotation); ok {
+	if d, ok := internal.FindAnnotation(spec.Metadata, internal.WorkloadKindAnnotation); ok {
 		kind = d
 		if kind != WorkloadKindDeployment && kind != WorkloadKindStatefulSet {
 			return nil, errors.Wrapf(err, "metadata: annotations: %s: unsupported workload kind", internal.WorkloadKindAnnotation)
@@ -47,7 +48,14 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 	volumeClaimTemplates := make([]coreV1.PersistentVolumeClaim, 0)
 
 	containers := make([]coreV1.Container, 0, len(spec.Containers))
-	for containerName, container := range spec.Containers {
+	containerNames := make([]string, 0, len(spec.Containers))
+	for name := range spec.Containers {
+		containerNames = append(containerNames, name)
+	}
+	slices.Sort(containerNames)
+
+	for _, containerName := range containerNames {
+		container := spec.Containers[containerName]
 		c := coreV1.Container{
 			Name:         containerName,
 			Image:        container.Image,
@@ -160,6 +168,10 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		})
 	}
 
+	// We want to apply the annotations from the workload onto the pod.
+	// See the doc of buildPodAnnotations for what gets included here.
+	k8sAnnotations := buildPodAnnotations(spec.Metadata)
+
 	switch kind {
 	case WorkloadKindDeployment:
 		manifests = append(manifests, &v1.Deployment{
@@ -180,6 +192,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 						Labels: map[string]string{
 							SelectorLabelWorkloadName: workloadName,
 						},
+						Annotations: k8sAnnotations,
 					},
 					Spec: coreV1.PodSpec{
 						Containers: containers,
@@ -226,6 +239,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 						Labels: map[string]string{
 							SelectorLabelWorkloadName: workloadName,
 						},
+						Annotations: k8sAnnotations,
 					},
 					Spec: coreV1.PodSpec{
 						Containers: containers,
@@ -262,4 +276,16 @@ func buildProbe(input scoretypes.HttpProbe) coreV1.ProbeHandler {
 		ph.HTTPGet.HTTPHeaders = h
 	}
 	return ph
+}
+
+// buildPodAnnotations builds the annotations map for a pod by copying the workload annotations
+// and removing any annotations scoped score-k8s.
+func buildPodAnnotations(metadata map[string]interface{}) map[string]string {
+	out := make(map[string]string)
+	for _, s := range internal.ListAnnotations(metadata) {
+		if v, ok := internal.FindAnnotation(metadata, s); ok && !strings.HasPrefix(s, internal.AnnotationPrefix) {
+			out[s] = v
+		}
+	}
+	return out
 }

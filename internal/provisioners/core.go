@@ -156,12 +156,8 @@ func (po *ProvisionOutput) ApplyToStateAndProject(state *project.State, resUid f
 		out.SharedState = util.PatchMap(state.SharedState, po.SharedState)
 	}
 
-	if out.Extras.Manifests == nil {
-		out.Extras.Manifests = make([]map[string]interface{}, 0)
-	}
-
 	if len(po.Manifests) > 0 {
-		out.Extras.Manifests = append(out.Extras.Manifests, po.Manifests...)
+		existing.Extras.Manifests = po.Manifests
 	}
 
 	out.Resources[resUid] = existing

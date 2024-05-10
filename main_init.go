@@ -33,9 +33,8 @@ var initCmd = &cobra.Command{
 				Path: project.DefaultRelativeStateDirectory,
 				State: project.State{
 					Workloads:   map[string]framework.ScoreWorkloadState[framework.NoExtras]{},
-					Resources:   map[framework.ResourceUid]framework.ScoreResourceState{},
+					Resources:   map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{},
 					SharedState: map[string]interface{}{},
-					Extras:      project.StateExtras{},
 				},
 			}
 			slog.Info(fmt.Sprintf("Writing new state directory '%s'", sd.Path))

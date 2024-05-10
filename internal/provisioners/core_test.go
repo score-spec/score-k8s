@@ -27,7 +27,7 @@ import (
 func TestApplyToStateAndProject(t *testing.T) {
 	resUid := framework.NewResourceUid("w", "r", "t", nil, nil)
 	startState := &project.State{
-		Resources: map[framework.ResourceUid]framework.ScoreResourceState{
+		Resources: map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 			resUid: {},
 		},
 	}
@@ -36,7 +36,7 @@ func TestApplyToStateAndProject(t *testing.T) {
 		output := &ProvisionOutput{}
 		afterState, err := output.ApplyToStateAndProject(startState, resUid)
 		require.NoError(t, err)
-		assert.Equal(t, framework.ScoreResourceState{
+		assert.Equal(t, framework.ScoreResourceState[project.ResourceExtras]{
 			State:   map[string]interface{}{},
 			Outputs: map[string]interface{}{},
 		}, afterState.Resources[resUid])
@@ -58,12 +58,21 @@ func TestApplyToStateAndProject(t *testing.T) {
 		}
 		afterState, err := output.ApplyToStateAndProject(startState, resUid)
 		require.NoError(t, err)
-		assert.Equal(t, framework.ScoreResourceState{
+		assert.Equal(t, framework.ScoreResourceState[project.ResourceExtras]{
 			State:   map[string]interface{}{"a": "b", "c": nil},
 			Outputs: map[string]interface{}{"x": "y"},
+			Extras: project.ResourceExtras{
+				Manifests: []map[string]interface{}{
+					{
+						"apiVersion": "v1",
+						"kind":       "ConfigMap",
+						"metadata":   map[string]interface{}{"name": "thing"},
+						"data":       map[string]interface{}{"key": "value"},
+					},
+				},
+			},
 		}, afterState.Resources[resUid])
 		assert.Equal(t, map[string]interface{}{"i": "j"}, afterState.SharedState)
-		assert.Len(t, afterState.Extras.Manifests, 1)
 	})
 
 }

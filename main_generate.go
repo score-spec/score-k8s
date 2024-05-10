@@ -139,20 +139,26 @@ var generateCmd = &cobra.Command{
 		out := new(bytes.Buffer)
 		var outCount int
 
-		for _, manifest := range state.Extras.Manifests {
-			if p, ok := internal.FindFirstUnresolvedSecretRef("", manifest); ok {
-				return errors.Errorf("unresolved secret ref in manifest: %s", p)
+		resIds, _ := state.GetSortedResourceUids()
+		for _, id := range resIds {
+			res := state.Resources[id]
+			if len(res.Extras.Manifests) > 0 {
+				for _, manifest := range res.Extras.Manifests {
+					if p, ok := internal.FindFirstUnresolvedSecretRef("", manifest); ok {
+						return errors.Errorf("unresolved secret ref in manifest: %s", p)
+					}
+					out.WriteString("---\n")
+					enc := yaml.NewEncoder(out)
+					enc.SetIndent(2)
+					if err := enc.Encode(manifest); err != nil {
+						return errors.Wrapf(err, "failed to recode")
+					}
+					out.WriteString("\n")
+					outCount += 1
+				}
+				slog.Info(fmt.Sprintf("Wrote %d resource manifests to manifests buffer for resource '%s'", len(res.Extras.Manifests), id))
 			}
-			out.WriteString("---\n")
-			enc := yaml.NewEncoder(out)
-			enc.SetIndent(2)
-			if err := enc.Encode(manifest); err != nil {
-				return errors.Wrapf(err, "failed to recode")
-			}
-			out.WriteString("\n")
-			outCount += 1
 		}
-		slog.Info(fmt.Sprintf("Wrote %d resource manifests to manifests buffer", len(state.Extras.Manifests)))
 
 		for workloadName := range state.Workloads {
 			manifests, err := convert.ConvertWorkload(state, workloadName)

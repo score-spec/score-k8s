@@ -39,7 +39,7 @@ func Test_convertContainerVariable_N_subs(t *testing.T) {
 
 func Test_convertContainerVariable_1_secret(t *testing.T) {
 	out, err := convertContainerVariable("KEY", "${foo.bar}", func(s string) (string, error) {
-		return internal.EncodeSecretReference("ns", "default", "some-key"), nil
+		return internal.EncodeSecretReference("default", "some-key"), nil
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, []coreV1.EnvVar{{Name: "KEY", ValueFrom: &coreV1.EnvVarSource{
@@ -53,8 +53,8 @@ func Test_convertContainerVariable_1_secret(t *testing.T) {
 func Test_convertContainerVariable_2_secret(t *testing.T) {
 	out, err := convertContainerVariable("KEY", "${foo.bar} ${a.b}", func(s string) (string, error) {
 		return map[string]string{
-			"foo.bar": internal.EncodeSecretReference("ns", "default", "some-key"),
-			"a.b":     internal.EncodeSecretReference("ns", "default", "other-key"),
+			"foo.bar": internal.EncodeSecretReference("default", "some-key"),
+			"a.b":     internal.EncodeSecretReference("default", "other-key"),
 		}[s], nil
 	})
 	assert.NoError(t, err)
