@@ -37,7 +37,7 @@ type ResourceExtras struct {
 
 type State = framework.State[framework.NoExtras, framework.NoExtras, ResourceExtras]
 
-// The StateDirectory holds the local state of the score-compose project, including any configuration, extensions,
+// The StateDirectory holds the local state of the score-k8s project, including any configuration, extensions,
 // plugins, or resource provisioning state when possible.
 type StateDirectory struct {
 	// The path to the .score-k8s directory

@@ -100,7 +100,7 @@ Alternative installation guides and implementations can be found in the [Score d
 
 ```
 $ score-k8s init --help
-The init subcommand will prepare the current directory for working with score-compose and write the initial
+The init subcommand will prepare the current directory for working with score-k8s and write the initial
 empty state and default provisioners file into the '.score-k8s' subdirectory.
 
 The '.score-k8s' directory contains state that will be used to generate any Kubernetes resource manifests including
@@ -127,7 +127,7 @@ $ score-k8s generate --help
 The generate command will convert Score files in the current Score state into a combined set of Kubernetes
 manifests. All resources and links between Workloads will be resolved and provisioned as required.
 
-"score-compose init" MUST be run first. An error will be thrown if the project directory is not present.
+"score-k8s init" MUST be run first. An error will be thrown if the project directory is not present.
 
 Usage:
   score-k8s generate [flags]

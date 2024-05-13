@@ -38,7 +38,7 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Args:  cobra.NoArgs,
 	Short: "Initialise a new score-k8s project with local state directory and sample score file",
-	Long: `The init subcommand will prepare the current directory for working with score-compose and write the initial
+	Long: `The init subcommand will prepare the current directory for working with score-k8s and write the initial
 empty state and default provisioners file into the '.score-k8s' subdirectory.
 
 The '.score-k8s' directory contains state that will be used to generate any Kubernetes resource manifests including

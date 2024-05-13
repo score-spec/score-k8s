@@ -55,7 +55,7 @@ var generateCmd = &cobra.Command{
 	Long: `The generate command will convert Score files in the current Score state into a combined set of Kubernetes
 manifests. All resources and links between Workloads will be resolved and provisioned as required.
 
-"score-compose init" MUST be run first. An error will be thrown if the project directory is not present.
+"score-k8s init" MUST be run first. An error will be thrown if the project directory is not present.
 `,
 	Example: `
   # Specify Score files
