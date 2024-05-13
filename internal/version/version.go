@@ -24,7 +24,7 @@ var (
 )
 
 // BuildVersionString constructs a version string by looking at the build metadata injected at build time.
-// This is particularly useful when score-compose is stilled from the go module using go install.
+// This is particularly useful when score-k8s is installed from the go module using go install.
 func BuildVersionString() string {
 	versionNumber, buildTime, gitSha, isDirtySuffix := Version, "local", "unknown", ""
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -34,9 +34,13 @@ func BuildVersionString() string {
 		for _, setting := range info.Settings {
 			switch setting.Key {
 			case "vcs.time":
-				buildTime = setting.Value
+				if setting.Value != "" {
+					buildTime = setting.Value
+				}
 			case "vcs.revision":
-				gitSha = setting.Value
+				if setting.Value != "" {
+					gitSha = setting.Value
+				}
 			case "vcs.modified":
 				if setting.Value == "true" {
 					isDirtySuffix = "-dirty"

@@ -80,8 +80,8 @@ func TestDecodeBinary_success(t *testing.T) {
 
 func TestDecodeBinary_fail(t *testing.T) {
 	for k, v := range map[string]string{
-		"cmd://absolutely-unknown-score-compose-provisioner": "failed to find 'absolutely-unknown-score-compose-provisioner' on path: exec: \"absolutely-unknown-score-compose-provisioner\": executable file not found in $PATH",
-		"cmd://something/foo":                                "direct command reference cannot contain additional path parts",
+		"cmd://absolutely-unknown-score-provisioner": "failed to find 'absolutely-unknown-score-provisioner' on path: exec: \"absolutely-unknown-score-provisioner\": executable file not found in $PATH",
+		"cmd://something/foo":                        "direct command reference cannot contain additional path parts",
 	} {
 		t.Run(k, func(t *testing.T) {
 			_, err := decodeBinary(k)

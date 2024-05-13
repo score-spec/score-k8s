@@ -12,6 +12,7 @@ If you are interested in making a code contribution and would like to learn more
 
 - [https://score.dev/)
 - [https://github.com/score-spec/score-compose]
+- [https://github.com/score-spec/score-k8s]
 
 ### **How do I make a contribution?**
 
