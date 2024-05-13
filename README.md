@@ -71,6 +71,31 @@ For details of how the standard "template" provisioner works, see the `template:
 
 ## Usage
 
+### Installation
+
+Either, install through Homebrew for macOS and supported Linux distributions:
+
+```
+$ brew install score-spec/tap/score-k8s
+
+# to upgrade an existing installation, tr
+$ brew upgrade score-k8s
+```
+
+Or, download the binaries for your platform from the [latest Github releases](https://github.com/score-spec/score-k8s/releases):
+
+```
+$ wget https://github.com/score-spec/score-k8s/releases/download/<x.y.z>/score-k8s_<x.y.z>_<os_system>.tar.gz
+```
+
+Or, install the Go module directly (Go > 1.22):
+
+```
+$ go install -v github.com/score-spec/score-k8s@latest
+```
+
+Alternative installation guides and implementations can be found in the [Score docs](https://docs.score.dev/docs/score-implementation/).
+
 ### Init
 
 ```
