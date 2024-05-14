@@ -192,7 +192,7 @@ Setup the cluster:
 
 ```console
 $ kind create cluster
-$ kubectl --context kind-kind apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+$ kubectl --context kind-kind apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml
 $ helm --kube-context kind-kind install ngf oci://ghcr.io/nginxinc/charts/nginx-gateway-fabric --create-namespace -n nginx-gateway --set service.type=ClusterIP
 $ kubectl --context kind-kind apply -f - <<EOF
 apiVersion: gateway.networking.k8s.io/v1
