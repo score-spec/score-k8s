@@ -32,9 +32,12 @@ import (
 )
 
 const (
-	WorkloadKindDeployment    = "Deployment"
-	WorkloadKindStatefulSet   = "StatefulSet"
-	SelectorLabelWorkloadName = "score-workload"
+	WorkloadKindDeployment  = "Deployment"
+	WorkloadKindStatefulSet = "StatefulSet"
+
+	SelectorLabelName      = "app.kubernetes.io/name"
+	SelectorLabelInstance  = "app.kubernetes.io/instance"
+	SelectorLabelManagedBy = "app.kubernetes.io/managed-by"
 )
 
 func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta.Object, error) {
@@ -67,6 +70,12 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		containerNames = append(containerNames, name)
 	}
 	slices.Sort(containerNames)
+
+	commonLabels := map[string]string{
+		SelectorLabelName:      workloadName,
+		SelectorLabelInstance:  workloadName + state.Workloads[workloadName].Extras.InstanceSuffix,
+		SelectorLabelManagedBy: "score-k8s",
+	}
 
 	for _, containerName := range containerNames {
 		container := spec.Containers[containerName]
@@ -179,10 +188,11 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			ObjectMeta: machineryMeta.ObjectMeta{
 				Name:        WorkloadServiceName(workloadName),
 				Annotations: topLevelAnnotations,
+				Labels:      commonLabels,
 			},
 			Spec: coreV1.ServiceSpec{
 				Selector: map[string]string{
-					SelectorLabelWorkloadName: workloadName,
+					SelectorLabelInstance: commonLabels[SelectorLabelInstance],
 				},
 				Ports: portList,
 			},
@@ -196,19 +206,18 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			ObjectMeta: machineryMeta.ObjectMeta{
 				Name:        workloadName,
 				Annotations: topLevelAnnotations,
+				Labels:      commonLabels,
 			},
 			Spec: v1.DeploymentSpec{
 				Replicas: internal.Ref(int32(1)),
 				Selector: &machineryMeta.LabelSelector{
-					MatchExpressions: []machineryMeta.LabelSelectorRequirement{
-						{SelectorLabelWorkloadName, machineryMeta.LabelSelectorOpIn, []string{workloadName}},
+					MatchLabels: map[string]string{
+						SelectorLabelInstance: commonLabels[SelectorLabelInstance],
 					},
 				},
 				Template: coreV1.PodTemplateSpec{
 					ObjectMeta: machineryMeta.ObjectMeta{
-						Labels: map[string]string{
-							SelectorLabelWorkloadName: workloadName,
-						},
+						Labels:      commonLabels,
 						Annotations: podAnnotations,
 					},
 					Spec: coreV1.PodSpec{
@@ -227,10 +236,11 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			ObjectMeta: machineryMeta.ObjectMeta{
 				Name:        headlessServiceName,
 				Annotations: topLevelAnnotations,
+				Labels:      commonLabels,
 			},
 			Spec: coreV1.ServiceSpec{
 				Selector: map[string]string{
-					SelectorLabelWorkloadName: workloadName,
+					SelectorLabelInstance: commonLabels[SelectorLabelInstance],
 				},
 				ClusterIP: "None",
 				Ports:     []coreV1.ServicePort{{Name: "default", Port: 99, TargetPort: intstr.FromInt32(99)}},
@@ -242,20 +252,19 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			ObjectMeta: machineryMeta.ObjectMeta{
 				Name:        workloadName,
 				Annotations: topLevelAnnotations,
+				Labels:      commonLabels,
 			},
 			Spec: v1.StatefulSetSpec{
 				Replicas: internal.Ref(int32(1)),
 				Selector: &machineryMeta.LabelSelector{
-					MatchExpressions: []machineryMeta.LabelSelectorRequirement{
-						{SelectorLabelWorkloadName, machineryMeta.LabelSelectorOpIn, []string{workloadName}},
+					MatchLabels: map[string]string{
+						SelectorLabelInstance: commonLabels[SelectorLabelInstance],
 					},
 				},
 				ServiceName: headlessServiceName,
 				Template: coreV1.PodTemplateSpec{
 					ObjectMeta: machineryMeta.ObjectMeta{
-						Labels: map[string]string{
-							SelectorLabelWorkloadName: workloadName,
-						},
+						Labels:      commonLabels,
 						Annotations: podAnnotations,
 					},
 					Spec: coreV1.PodSpec{

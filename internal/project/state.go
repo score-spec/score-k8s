@@ -30,12 +30,16 @@ const (
 	StateFileName                 = "state.yaml"
 )
 
+type WorkloadExtras struct {
+	InstanceSuffix string `yaml:"instance_suffix"`
+}
+
 type ResourceExtras struct {
 	// Don't actually persist these manifests, we just hold them here so we can pass them around.
 	Manifests []map[string]interface{} `yaml:"-"`
 }
 
-type State = framework.State[framework.NoExtras, framework.NoExtras, ResourceExtras]
+type State = framework.State[framework.NoExtras, WorkloadExtras, ResourceExtras]
 
 // The StateDirectory holds the local state of the score-k8s project, including any configuration, extensions,
 // plugins, or resource provisioning state when possible.

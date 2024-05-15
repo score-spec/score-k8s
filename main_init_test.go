@@ -115,7 +115,7 @@ func TestInitNominal_run_twice(t *testing.T) {
 	assert.NoError(t, err)
 	if assert.True(t, ok) {
 		assert.Equal(t, project.DefaultRelativeStateDirectory, sd.Path)
-		assert.Equal(t, map[string]framework.ScoreWorkloadState[framework.NoExtras]{}, sd.State.Workloads)
+		assert.Equal(t, map[string]framework.ScoreWorkloadState[project.WorkloadExtras]{}, sd.State.Workloads)
 		assert.Equal(t, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{}, sd.State.Resources)
 		assert.Equal(t, map[string]interface{}{}, sd.State.SharedState)
 	}

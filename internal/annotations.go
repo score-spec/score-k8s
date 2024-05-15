@@ -14,7 +14,11 @@
 
 package internal
 
-import "slices"
+import (
+	"slices"
+
+	score "github.com/score-spec/score-go/types"
+)
 
 const (
 	AnnotationPrefix       = "k8s.score.dev/"
@@ -22,7 +26,11 @@ const (
 )
 
 func ListAnnotations(metadata map[string]interface{}) []string {
-	if a, ok := metadata["annotations"].(map[string]interface{}); ok {
+	a, ok := metadata["annotations"].(map[string]interface{})
+	if !ok {
+		a, ok = metadata["annotations"].(score.WorkloadMetadata)
+	}
+	if ok {
 		out := make([]string, 0, len(a))
 		for s, _ := range a {
 			out = append(out, s)
@@ -34,7 +42,11 @@ func ListAnnotations(metadata map[string]interface{}) []string {
 }
 
 func FindAnnotation(metadata map[string]interface{}, annotation string) (string, bool) {
-	if a, ok := metadata["annotations"].(map[string]interface{}); ok {
+	a, ok := metadata["annotations"].(map[string]interface{})
+	if !ok {
+		a, ok = metadata["annotations"].(score.WorkloadMetadata)
+	}
+	if ok {
 		if v, ok := a[annotation].(string); ok {
 			return v, true
 		}

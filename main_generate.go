@@ -17,6 +17,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log/slog"
 	"os"
@@ -129,6 +130,7 @@ manifests. All resources and links between Workloads will be resolved and provis
 			} else if err = scoreloader.MapSpec(&workload, rawWorkload); err != nil {
 				return errors.Wrapf(err, "failed to decode input score file: %s", arg)
 			}
+			workloadName := workload.Metadata["name"].(string)
 
 			// Apply image override
 			for containerName, container := range workload.Containers {
@@ -143,7 +145,16 @@ manifests. All resources and links between Workloads will be resolved and provis
 				}
 			}
 
-			if state, err = state.WithWorkload(&workload, &arg, framework.NoExtras{}); err != nil {
+			var extras project.WorkloadExtras
+			if existing, ok := state.Workloads[workloadName]; ok && existing.Extras.InstanceSuffix != "" {
+				extras = existing.Extras
+			} else {
+				extrasBytes := make([]byte, 5)
+				_, _ = rand.Read(extrasBytes)
+				extras.InstanceSuffix = fmt.Sprintf("-%x", extrasBytes)
+			}
+
+			if state, err = state.WithWorkload(&workload, &arg, extras); err != nil {
 				return errors.Wrapf(err, "failed to add score file to project: %s", arg)
 			}
 			slog.Info("Added score file to project", "file", arg)
