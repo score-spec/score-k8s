@@ -83,6 +83,15 @@ func TestMassive(t *testing.T) {
 				Image: "other-image",
 			},
 		},
+		Service: &scoretypes.WorkloadService{
+			Ports: map[string]scoretypes.ServicePort{
+				"web": {
+					Port:       80,
+					TargetPort: internal.Ref(8080),
+					Protocol:   internal.Ref(scoretypes.ServicePortProtocolUDP),
+				},
+			},
+		},
 		Resources: map[string]scoretypes.Resource{
 			"foo": {
 				Type:  "thing",
@@ -94,7 +103,7 @@ func TestMassive(t *testing.T) {
 				Class: internal.Ref("default"),
 			},
 		},
-	}, nil, framework.NoExtras{})
+	}, nil, project.WorkloadExtras{InstanceSuffix: "-abcdef"})
 	require.NoError(t, err)
 	state.Resources = map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"thing.default#shared": {
@@ -131,21 +140,43 @@ kind: ConfigMap
 metadata:
   creationTimestamp: null
   name: example-c1-file-0
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    k8s.score.dev/workload-name: example
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: example-abcdef
+    app.kubernetes.io/managed-by: score-k8s
+    app.kubernetes.io/name: example
+  name: example-svc
+spec:
+  ports:
+  - name: web
+    port: 80
+    protocol: UDP
+    targetPort: 8080
+  selector:
+    app.kubernetes.io/instance: example-abcdef
+status:
+  loadBalancer: {}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
     k8s.score.dev/workload-name: example
   creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: example-abcdef
+    app.kubernetes.io/managed-by: score-k8s
+    app.kubernetes.io/name: example
   name: example
 spec:
   replicas: 1
   selector:
-    matchExpressions:
-    - key: score-workload
-      operator: In
-      values:
-      - example
+    matchLabels:
+      app.kubernetes.io/instance: example-abcdef
   strategy: {}
   template:
     metadata:
@@ -154,7 +185,9 @@ spec:
         my.custom.scope/annotation: value
       creationTimestamp: null
       labels:
-        score-workload: example
+        app.kubernetes.io/instance: example-abcdef
+        app.kubernetes.io/managed-by: score-k8s
+        app.kubernetes.io/name: example
     spec:
       containers:
       - args:

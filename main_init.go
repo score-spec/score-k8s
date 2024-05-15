@@ -61,7 +61,7 @@ potentially sensitive data and raw secrets, so this should not be checked into g
 			sd = &project.StateDirectory{
 				Path: project.DefaultRelativeStateDirectory,
 				State: project.State{
-					Workloads:   map[string]framework.ScoreWorkloadState[framework.NoExtras]{},
+					Workloads:   map[string]framework.ScoreWorkloadState[project.WorkloadExtras]{},
 					Resources:   map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{},
 					SharedState: map[string]interface{}{},
 				},

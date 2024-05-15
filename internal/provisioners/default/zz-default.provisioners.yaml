@@ -42,7 +42,7 @@
     - apiVersion: v1
       kind: ConfigMap
       metadata:
-        name: {{ .Uid }}
+        name: cfg-{{ .Guid }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -85,7 +85,6 @@
 - uri: template://default-provisioners/route
   type: route
   init: |
-    randomRouteName: routing-{{ .SourceWorkload }}-{{ randAlphaNum 6 | lower }}
     {{ if not (regexMatch "^/|(/([^/]+))+$" .Params.path) }}{{ fail "params.path start with a / but cannot end with /" }}{{ end }}
     {{ if not (regexMatch "^[a-z0-9_.-]{1,253}$" .Params.host) }}{{ fail (cat "params.host must be a valid hostname but was" .Params.host) }}{{ end }}
     {{ $ports := (index .WorkloadServices .SourceWorkload).Ports }}
@@ -93,7 +92,7 @@
     {{ $port := index $ports (print .Params.port) }}
     {{ if not $port.TargetPort }}{{ fail "params.port is not a named service port" }}{{ end }}
   state: |
-    routeName: {{ dig "routeName" .Init.randomRouteName .State | quote }}
+    routeName: route-{{ .SourceWorkload }}-{{ substr 0 8 .Guid | lower }}
   manifests: |
     - apiVersion: gateway.networking.k8s.io/v1
       kind: HTTPRoute
@@ -103,6 +102,10 @@
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
           k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.routeName }}
+          app.kubernetes.io/instance: {{ .State.routeName }}
       spec:
         parentRefs:
         - name: default
@@ -120,12 +123,11 @@
 - uri: template://default-provisioners/postgres
   type: postgres
   init: |
-    randomServiceName: pg-{{ randAlphaNum 6 | lower }}
     randomDatabase: db-{{ randAlpha 8 }}
     randomUsername: user-{{ randAlpha 8 }}
     randomPassword: {{ randAlphaNum 16 | quote }}
   state: |
-    service: {{ dig "service" .Init.randomServiceName .State | quote }}
+    service: pg-{{ .SourceWorkload }}-{{ substr 0 8 .Guid | lower }}
     database: {{ dig "database" .Init.randomDatabase .State | quote }}
     username: {{ dig "username" .Init.randomUsername .State | quote }}
     password: {{ dig "password" .Init.randomPassword .State | quote }}
@@ -145,6 +147,10 @@
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
           k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
       data:
         password: {{ .State.password | b64enc }}
     - apiVersion: apps/v1
@@ -155,18 +161,22 @@
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
           k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
       spec:
         replicas: 1
         serviceName: {{ .State.service }}
         selector:
           matchLabels:
-            scoreWorkload: {{ .SourceWorkload }}
-            app: {{ .State.service }}
+            app.kubernetes.io/instance: {{ .State.service }}
         template:
           metadata:
             labels:
-              scoreWorkload: {{ .SourceWorkload }}
-              app: {{ .State.service }}
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ .State.service }}
+              app.kubernetes.io/instance: {{ .State.service }}
             annotations:
               k8s.score.dev/source-workload: {{ .SourceWorkload }}
               k8s.score.dev/resource-uid: {{ .Uid }}
@@ -207,6 +217,10 @@
               k8s.score.dev/source-workload: {{ .SourceWorkload }}
               k8s.score.dev/resource-uid: {{ .Uid }}
               k8s.score.dev/resource-guid: {{ .Guid }}
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ .State.service }}
+              app.kubernetes.io/instance: {{ .State.service }}
           spec:
             accessModes: ["ReadWriteOnce"]
             resources:
@@ -220,10 +234,13 @@
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
           k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
       spec:
         selector:
-          scoreWorkload: {{ .SourceWorkload }}
-          app: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
         type: ClusterIP
         ports:
         - port: 5432
@@ -232,10 +249,9 @@
 - uri: template://default-provisioners/redis
   type: redis
   init: |
-    randomServiceName: redis-{{ randAlphaNum 6 | lower }}
     randomPassword: {{ randAlphaNum 16 | quote }}
   state: |
-    service: {{ dig "service" .Init.randomServiceName .State | quote }}
+    service: redis-{{ .SourceWorkload }}-{{ substr 0 8 .Guid | lower }}
     username: default
     password: {{ dig "password" .Init.randomPassword .State | quote }}
   outputs: |
@@ -252,6 +268,10 @@
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
           k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
       data:
         password: {{ .State.password | b64enc }}
         redis.conf: {{ printf "requirepass %s\nport 6379\nsave 60 1\nloglevel warning\n" .State.password | b64enc }}
@@ -263,18 +283,22 @@
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
           k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
       spec:
         replicas: 1
         serviceName: {{ .State.service }}
         selector:
           matchLabels:
-            scoreWorkload: {{ .SourceWorkload }}
-            app: {{ .State.service }}
+            app.kubernetes.io/instance: {{ .State.service }}
         template:
           metadata:
             labels:
-              scoreWorkload: {{ .SourceWorkload }}
-              app: {{ .State.service }}
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ .State.service }}
+              app.kubernetes.io/instance: {{ .State.service }}
             annotations:
               k8s.score.dev/source-workload: {{ .SourceWorkload }}
               k8s.score.dev/resource-uid: {{ .Uid }}
@@ -311,6 +335,10 @@
               k8s.score.dev/source-workload: {{ .SourceWorkload }}
               k8s.score.dev/resource-uid: {{ .Uid }}
               k8s.score.dev/resource-guid: {{ .Guid }}
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ .State.service }}
+              app.kubernetes.io/instance: {{ .State.service }}
           spec:
             accessModes: ["ReadWriteOnce"]
             resources:
@@ -324,10 +352,13 @@
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
           k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
       spec:
         selector:
-          scoreWorkload: {{ .SourceWorkload }}
-          app: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
         type: ClusterIP
         ports:
         - port: 6379

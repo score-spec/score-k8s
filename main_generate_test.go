@@ -150,3 +150,61 @@ containers:
 		assert.Contains(t, string(raw), "---\napiVersion: apps/v1\nkind: Deployment\n")
 	})
 }
+
+func TestInitAndGenerate_with_default_provisioners(t *testing.T) {
+	td := changeToTempDir(t)
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	assert.NoError(t, err)
+	assert.Equal(t, "", stdout)
+
+	// write new score file
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  example:
+    image: nginx:latest
+service:
+  ports:
+    web:
+      port: 8080
+resources:
+  res-a:
+    type: example-provisioner-resource
+  res-b:
+    type: volume
+  res-c:
+    type: dns
+  res-d:
+    type: route
+    params:
+      host: ${resources.res-c.host}
+      path: /
+      port: 8080
+  res-e:
+    type: postgres
+  res-f:
+    type: redis
+`), 0644))
+
+	// generate first
+	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "", stdout)
+	raw, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
+	assert.NoError(t, err)
+
+	// generate second
+	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "", stdout)
+	raw2, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
+	assert.NoError(t, err)
+
+	assert.Contains(t, string(raw), string(raw2))
+}
