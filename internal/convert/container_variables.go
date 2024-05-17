@@ -108,6 +108,14 @@ func convertContainerVariables(variables scoretypes.ContainerVariables, substitu
 		}
 	}
 	slices.SortFunc(out, func(a, b coreV1.EnvVar) int {
+		// note __ref-'s must always be first!
+		aRef, bRef := strings.HasPrefix(a.Name, "__ref_"), strings.HasPrefix(b.Name, "__ref_")
+		if aRef && !bRef {
+			return -1
+		} else if bRef && !aRef {
+			return 1
+		}
+		// anything else gets sorted naturally
 		return strings.Compare(a.Name, b.Name)
 	})
 	return out, nil
