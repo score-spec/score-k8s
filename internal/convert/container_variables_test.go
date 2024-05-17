@@ -88,3 +88,34 @@ func Test_convertContainerVariable_2_secret(t *testing.T) {
 		{Name: "KEY", Value: "$(__ref_0960osB2KjQY08QKfHliCg) $(__ref_mWObImRl7lfuP04NHDPsvA)"},
 	}, out)
 }
+
+func Test_convertContainerVariables_sorting(t *testing.T) {
+	out, err := convertContainerVariables(map[string]string{
+		"BUZZ": "FIZZ",
+		"KEY":  "${foo.bar} ${a.b}",
+		"FIZZ": "BUZZ",
+	}, func(s string) (string, error) {
+		return map[string]string{
+			"foo.bar": internal.EncodeSecretReference("default", "some-key"),
+			"a.b":     internal.EncodeSecretReference("default", "other-key"),
+		}[s], nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []coreV1.EnvVar{
+		{Name: "__ref_0960osB2KjQY08QKfHliCg", ValueFrom: &coreV1.EnvVarSource{
+			SecretKeyRef: &coreV1.SecretKeySelector{
+				LocalObjectReference: coreV1.LocalObjectReference{Name: "default"},
+				Key:                  "some-key",
+			},
+		}},
+		{Name: "__ref_mWObImRl7lfuP04NHDPsvA", ValueFrom: &coreV1.EnvVarSource{
+			SecretKeyRef: &coreV1.SecretKeySelector{
+				LocalObjectReference: coreV1.LocalObjectReference{Name: "default"},
+				Key:                  "other-key",
+			},
+		}},
+		{Name: "BUZZ", Value: "FIZZ"},
+		{Name: "FIZZ", Value: "BUZZ"},
+		{Name: "KEY", Value: "$(__ref_0960osB2KjQY08QKfHliCg) $(__ref_mWObImRl7lfuP04NHDPsvA)"},
+	}, out)
+}
