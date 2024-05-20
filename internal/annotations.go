@@ -16,8 +16,6 @@ package internal
 
 import (
 	"slices"
-
-	score "github.com/score-spec/score-go/types"
 )
 
 const (
@@ -27,9 +25,6 @@ const (
 
 func ListAnnotations(metadata map[string]interface{}) []string {
 	a, ok := metadata["annotations"].(map[string]interface{})
-	if !ok {
-		a, ok = metadata["annotations"].(score.WorkloadMetadata)
-	}
 	if ok {
 		out := make([]string, 0, len(a))
 		for s, _ := range a {
@@ -43,9 +38,6 @@ func ListAnnotations(metadata map[string]interface{}) []string {
 
 func FindAnnotation(metadata map[string]interface{}, annotation string) (string, bool) {
 	a, ok := metadata["annotations"].(map[string]interface{})
-	if !ok {
-		a, ok = metadata["annotations"].(score.WorkloadMetadata)
-	}
 	if ok {
 		if v, ok := a[annotation].(string); ok {
 			return v, true
