@@ -56,3 +56,17 @@ func Test_convertContainerResources_nominal(t *testing.T) {
 		},
 	}, rl)
 }
+
+func Test_convertContainerResources_partial(t *testing.T) {
+	rl, err := convertContainerResources(&scoretypes.ContainerResources{
+		Limits: &scoretypes.ResourcesLimits{
+			Memory: internal.Ref("20Mi"),
+		},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, coreV1.ResourceRequirements{
+		Limits: map[coreV1.ResourceName]resource.Quantity{
+			"memory": resource.MustParse("20Mi"),
+		},
+	}, rl)
+}

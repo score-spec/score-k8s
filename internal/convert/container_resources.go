@@ -30,6 +30,8 @@ func convertContainerResources(resources *scoretypes.ContainerResources) (coreV1
 			if err != nil {
 				return out, errors.Wrap(err, "requests: failed to convert")
 			}
+		}
+		if resources.Limits != nil {
 			out.Limits, err = buildResourceList(resources.Limits)
 			if err != nil {
 				return out, errors.Wrap(err, "limits: failed to convert")
