@@ -65,7 +65,7 @@ resources:
 
 Provisioners are loaded from any `*.provisioners.yaml` files in the local `.score-k8s` directory, and matched to the resources by the `type` and optional `class` and `id` fields. Matches are performed with a first-match policy, so default provisioners can be overridden by supplying a custom provisioner with the same `type`.
 
-Generally, users will want to copy in the provisioners files that work with their cluster. For example, if the cluster has postgres or mysql operators installed, then
+Generally, users will want to copy in the provisioners files that work with their cluster. For example, if the cluster has Postgres or MySQL operators installed, then custom provisioners can be written to provision a database using the operator-specific CRDs with any clustering and backup mechanisms configured.
 
 For details of how the standard "template" provisioner works, see the `template://example-provisioners/example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml). For details of how the standard "cmd" provisioner works, see the `cmd://bash#example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml).
 
