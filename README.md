@@ -1,4 +1,4 @@
-<img src="docs/images/banner.png"/>
+<img src="images/banner.png"/>
 
 # score-k8s
 
