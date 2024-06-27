@@ -1,8 +1,10 @@
+<img src="docs/images/banner.png"/>
+
 # score-k8s
 
-`score-k8s` is an implementation of the Score Workload specification for Kubernetes and converts input Score files into a YAML file containing Kubernetes manifests that can be packaged or installed through `kubectl apply`. `score-k8s` is a reference implementation for [Score](https://docs.score.dev/) and is used mostly for demonstration and reference purposes but _may_ be used for pre-production/production use if necessary.
+`score-k8s` is a reference implementation of the [Score specification](https://github.com/score-spec/spec) for [Kubernetes](https://kubernetes.io/). It converts Score files into a YAML file containing Kubernetes manifests that can be packaged or installed through `kubectl apply`. `score-k8s` is used primarily for demonstration and reference purposes but _may_ be used for pre-production/production use if necessary.
 
-`score-k8s` supports most aspects of the Score Workload specification and supports a powerful resource provisioning system for supplying and customising the dynamic configuration of attached services such as databases, queues, storage, and other network or storage APIs.
+This implementation supports most aspects of the Score specification and provides a powerful resource provisioning system for supplying and customising the dynamic configuration of attached services such as databases, queues, storage, and other network or storage APIs.
 
 ![workflow diagram](workflow.drawio.png)
 
@@ -14,46 +16,6 @@
 3. Iterate by changing the score files, and re-running `generate`.
 4. The manifests can then be validated and deployed through `kubectl apply -f manifests.yaml`.
 5. To remove the resources from the cluster, the same `kubectl delete -f manifests.yaml` can be used.
-
-## Score overview
-
-Score aims to improve developer productivity and experience by reducing the risk of configuration inconsistencies between local and remote environments. It provides developer-centric workload specification (`score.yaml`) which captures a workloads runtime requirements in a platform-agnostic manner. Learn more [here](https://github.com/score-spec/spec#-what-is-score).
-
-The `score.yaml` specification file can be executed against a _Score Implementation CLI_, a conversion tool for application developers to generate environment specific configuration. In combination with environment specific parameters, the CLI tool can run your workload in the target environment by generating a platform-specific configuration file.
-
-An example Score file may look like:
-
-```yaml
-apiVersion: score.dev/v1b1
-metadata:
-  name: demo-app
-# The workload contains a single container with a demo image
-containers:
-  main:
-    image: ghcr.io/astromechza/demo-app:latest
-    variables:
-      # We're injecting a redis resource here that gets provisioned from the resources section
-      OVERRIDE_REDIS: "redis://${resources.cache.username}:${resources.cache.password}@${resources.cache.host}:${resources.cache.port}"
-# Declare that this service exposes port 8080, we're using that in the route resource
-service:
-  ports:
-    web:
-      port: 8080
-resources:
-  # The dns resource provisions a 'host' output as a valid hostname.
-  dns:
-    type: dns
-  # The route resource routes requests matching the prefix path and hostname to our service port
-  route:
-    type: route
-    params:
-      host: ${resources.dns.host}
-      path: /
-      port: 8080
-  # And here is the definition of our cache resource
-  cache:
-    type: redis
-```
 
 ## Feature support
 
@@ -69,32 +31,7 @@ Generally, users will want to copy in the provisioners files that work with thei
 
 For details of how the standard "template" provisioner works, see the `template://example-provisioners/example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml). For details of how the standard "cmd" provisioner works, see the `cmd://bash#example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml).
 
-## Usage
-
-### Installation
-
-Either, install through Homebrew for macOS and supported Linux distributions:
-
-```
-$ brew install score-spec/tap/score-k8s
-
-# to upgrade an existing installation, tr
-$ brew upgrade score-k8s
-```
-
-Or, download the binaries for your platform from the [latest Github releases](https://github.com/score-spec/score-k8s/releases):
-
-```
-$ wget https://github.com/score-spec/score-k8s/releases/download/<x.y.z>/score-k8s_<x.y.z>_<os_system>.tar.gz
-```
-
-Or, install the Go module directly (Go > 1.22):
-
-```
-$ go install -v github.com/score-spec/score-k8s@latest
-```
-
-Alternative installation guides and implementations can be found in the [Score docs](https://docs.score.dev/docs/score-implementation/).
+## Commands
 
 ### Init
 
@@ -157,6 +94,10 @@ Flags:
       --overrides-file string           An optional file of Score overrides to merge in
       --patch-manifests stringArray     An optional set of <kind|*>/<name|*>/path=key operations for the output manifests
 ```
+
+## Installation
+
+To install `score-k8s`, follow the instructions as described in our [installation guide](https://docs.score.dev/docs/score-implementation/score-k8s/#installation).
 
 ## FAQ
 
@@ -223,3 +164,29 @@ $ score-k8s resources get-outputs 'dns.default#demo-app.dns' --format '{{.host}}
 ### Once I have provisioned a resource, how do I delete it or clean it up?
 
 Resource cleanup has not been implemented yet. The only mechanism today is limited to deleting the Kubernetes manifests output by a template provisioner. As a workaround, the YAML structure in `.score-k8s/state.yaml` can be interpreted to determine what side effects need to be cleaned up.
+
+## Get in touch
+
+Connect with us through the [Score Slack channel](https://join.slack.com/t/scorecommunity/shared_invite/zt-2a0x563j7-i1vZOK2Yg2o4TwCM1irIuA) or contact us via email at team@score.dev.
+
+We host regular community meetings to discuss updates, share ideas, and collaborate. Here are the details:
+
+| Community call | Info |
+|:-----------|:------------|
+| Meeting Link | Join via [Google Meet](https://meet.google.com/znt-usdc-hzs) or call +49 40 8081618260 (Pin: 599 887 196)
+| Meeting Agenda & Notes | Add to our agenda or review minutes [here](https://github.com/score-spec/spec/discussions/categories/community-meetings)
+| Meeting Time | 1:00-2:00pm UTC, every first Thursday of the month
+
+If you can't attend at the scheduled time but would like to discuss something, please reach out. We’re happy to arrange an ad-hoc meeting that fits your schedule.
+
+### Contribution Guidelines and Governance
+
+Our general contributor guidelines can be found in [CONTRIBUTING.md](CONTRIBUTING.md). Please note that some repositories may have additional guidelines. For more information on our governance model, please refer to [GOVERNANCE.md](https://github.com/score-spec/spec/blob/main/GOVERNANCE.md).
+
+### Documentation
+
+You can find our documentation at [docs.score.dev](https://docs.score.dev/docs).
+
+### Roadmap
+
+See [Roadmap](https://github.com/score-spec/spec/blob/main/roadmap.md). You can [submit an idea](https://github.com/score-spec/spec/blob/main/roadmap.md#get-involved) anytime.
