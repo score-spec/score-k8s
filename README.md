@@ -31,6 +31,21 @@ Generally, users will want to copy in the provisioners files that work with thei
 
 For details of how the standard "template" provisioner works, see the `template://example-provisioners/example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml). For details of how the standard "cmd" provisioner works, see the `cmd://bash#example-provisioner` provisioner [here](internal/provisioners/default/zz-default.provisioners.yaml).
 
+## Provisioner support
+
+`score-k8s` comes with out-of-the-box support for:
+
+| Type          | Class   | Params                 | Output                                                                                                                                                          |
+| ------------- | ------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| volume        | default | (none)                 | `source`                                                                                                                                                        |
+| redis         | default | (none)                 | `host`, `port`, `username`, `password`                                                                                                                          |
+| postgres      | default | (none)                 | `host`, `port`, `name` (aka `database`), `username`, `password`                                                                                                 |
+| mysql         | default | (none)                 | `host`, `port`, `name` (aka `database`), `username`, `password`                                                                                                 |
+| dns           | default | (none)                 | `host`                                                                                                                                                          |
+| route         | default | `host`, `path`, `port` |                                                                                                                                                                 |
+
+Users are encouraged to write their own custom provisioners to support new resource types or to modify the implementations above.
+
 ## Commands
 
 ### Init
