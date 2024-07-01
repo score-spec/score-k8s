@@ -97,7 +97,27 @@ Flags:
 
 ## Installation
 
-To install `score-k8s`, follow the instructions as described in our [installation guide](https://docs.score.dev/docs/score-implementation/score-k8s/#installation).
+Either, install through Homebrew for macOS and supported Linux distributions:
+
+```
+$ brew install score-spec/tap/score-k8s
+# to upgrade an existing installation, tr
+$ brew upgrade score-k8s
+```
+
+Or, download the binaries for your platform from the [latest Github releases](https://github.com/score-spec/score-k8s/releases):
+
+```
+$ wget https://github.com/score-spec/score-k8s/releases/download/<x.y.z>/score-k8s_<x.y.z>_<os_system>.tar.gz
+```
+
+Or, install the Go module directly (Go > 1.22):
+
+```
+$ go install -v github.com/score-spec/score-k8s@latest
+```
+
+Alternative installation guides and implementations can be found in the [Score docs](https://docs.score.dev/docs/score-implementation/score-k8s/#installation).
 
 ## FAQ
 
@@ -167,17 +187,7 @@ Resource cleanup has not been implemented yet. The only mechanism today is limit
 
 ## Get in touch
 
-Connect with us through the [Score Slack channel](https://join.slack.com/t/scorecommunity/shared_invite/zt-2a0x563j7-i1vZOK2Yg2o4TwCM1irIuA) or contact us via email at team@score.dev.
-
-We host regular community meetings to discuss updates, share ideas, and collaborate. Here are the details:
-
-| Community call | Info |
-|:-----------|:------------|
-| Meeting Link | Join via [Google Meet](https://meet.google.com/znt-usdc-hzs) or call +49 40 8081618260 (Pin: 599 887 196)
-| Meeting Agenda & Notes | Add to our agenda or review minutes [here](https://github.com/score-spec/spec/discussions/categories/community-meetings)
-| Meeting Time | 1:00-2:00pm UTC, every first Thursday of the month
-
-If you can't attend at the scheduled time but would like to discuss something, please reach out. We’re happy to arrange an ad-hoc meeting that fits your schedule.
+Learn how to connect and engage with our community [here](https://github.com/score-spec/spec?tab=readme-ov-file#-get-in-touch).
 
 ### Contribution Guidelines and Governance
 
