@@ -28,7 +28,11 @@ jobs:
         run: go test ./... -cover -race
       -
         name: Build binary
-        run: go build -o score-k8s ./
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: build --snapshot
       -
         name: Install license check tool
         run: go install github.com/google/addlicense@latest
@@ -58,11 +62,11 @@ jobs:
           go-version-file: 'go.mod'
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v3
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: latest
-          args: release --rm-dist
+          version: '~> v2'
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
