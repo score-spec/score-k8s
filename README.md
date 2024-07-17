@@ -7,6 +7,7 @@
 This implementation supports most aspects of the Score specification and provides a powerful resource provisioning system for supplying and customising the dynamic configuration of attached services such as databases, queues, storage, and other network or storage APIs.
 
 ![workflow diagram](workflow.drawio.png)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fscore-spec%2Fscore-k8s.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fscore-spec%2Fscore-k8s?ref=badge_shield)
 
 1. The user runs `score-k8s init` in their project to initialise the empty state and default provisioners
 
@@ -215,3 +216,7 @@ You can find our documentation at [docs.score.dev](https://docs.score.dev/docs).
 ### Roadmap
 
 See [Roadmap](https://github.com/score-spec/spec/blob/main/roadmap.md). You can [submit an idea](https://github.com/score-spec/spec/blob/main/roadmap.md#get-involved) anytime.
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fscore-spec%2Fscore-k8s.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fscore-spec%2Fscore-k8s?ref=badge_large)
