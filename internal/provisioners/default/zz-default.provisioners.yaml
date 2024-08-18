@@ -496,7 +496,7 @@
           targetPort: 3306
 
 - uri: template://default-provisioners/mongo
-  type: mongo
+  type: mongodb
   init: |
     randomDatabase: db-{{ randAlpha 8 }}
     randomUsername: user-{{ randAlpha 8 }}
