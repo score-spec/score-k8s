@@ -510,7 +510,7 @@
     host: {{ .State.service }}
     port: 27017
     name: {{ .State.database }}
-    database: {{ .State.database }}
+    connection: "mongodb://{{ .State.username }}:{{ .State.password }}@{{ .State.service }}:27017/"
     username: {{ .State.username }}
     password: {{ encodeSecretRef .State.service "MONGO_INITDB_ROOT_PASSWORD" }}
   manifests: |
