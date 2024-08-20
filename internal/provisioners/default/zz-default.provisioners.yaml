@@ -66,7 +66,7 @@
 - uri: template://default-provisioners/volume
   type: volume
   outputs: |
-    source: 
+    source:
       emptyDir: {}
 
 # The default dns provisioner just outputs a random localhost domain because we don't know whether external-dns is
@@ -113,7 +113,7 @@
         - {{ .Params.host | quote }}
         rules:
         - matches:
-          - path: 
+          - path:
               type: PathPrefix
               value: {{ .Params.path | quote }}
           backendRefs:
@@ -203,7 +203,7 @@
                 mountPath: /var/lib/postgresql/data
               readinessProbe:
                 exec:
-                  command: 
+                  command:
                   - pg_isready
                   - -U
                   - {{ .State.username | quote }}
@@ -317,7 +317,7 @@
                 mountPath: /usr/local/etc/redis
               readinessProbe:
                 exec:
-                  command: 
+                  command:
                   - redis-cli
                   - ping
                 periodSeconds: 3
@@ -453,7 +453,7 @@
                 mountPath: /var/lib/mysql
               readinessProbe:
                 exec:
-                  command: 
+                  command:
                   - mysqladmin
                   - ping
                   - -h
@@ -494,3 +494,127 @@
         ports:
         - port: 3306
           targetPort: 3306
+
+- uri: template://default-provisioners/mongo
+  type: mongodb
+  init: |
+    randomDatabase: db-{{ randAlpha 8 }}
+    randomUsername: user-{{ randAlpha 8 }}
+    randomPassword: {{ randAlphaNum 16 | quote }}
+  state: |
+    service: mongo-{{ .SourceWorkload }}-{{ substr 0 8 .Guid | lower }}
+    database: {{ dig "database" .Init.randomDatabase .State | quote }}
+    username: {{ dig "username" .Init.randomUsername .State | quote }}
+    password: {{ dig "password" .Init.randomPassword .State | quote }}
+  outputs: |
+    host: {{ .State.service }}
+    port: 27017
+    name: {{ .State.database }}
+    connection: "mongodb://{{ .State.username }}:{{ .State.password }}@{{ .State.service }}:27017/"
+    username: {{ .State.username }}
+    password: {{ encodeSecretRef .State.service "MONGO_INITDB_ROOT_PASSWORD" }}
+  manifests: |
+    - apiVersion: v1
+      kind: Secret
+      metadata:
+        name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
+      data:
+        MONGO_INITDB_ROOT_PASSWORD: {{ .State.password | b64enc }}
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
+      spec:
+        replicas: 1
+        serviceName: {{ .State.service }}
+        selector:
+          matchLabels:
+            app.kubernetes.io/instance: {{ .State.service }}
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ .State.service }}
+              app.kubernetes.io/instance: {{ .State.service }}
+            annotations:
+              k8s.score.dev/source-workload: {{ .SourceWorkload }}
+              k8s.score.dev/resource-uid: {{ .Uid }}
+              k8s.score.dev/resource-guid: {{ .Guid }}
+          spec:
+            containers:
+            - name: mongo-db
+              image: mongo:latest
+              ports:
+              - name: mongo
+                containerPort: 27017
+              env:
+              - name: MONGO_INITDB_ROOT_USERNAME
+                value: {{ .State.username | quote }}
+              - name: MONGO_INITDB_ROOT_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ .State.service }}
+                    key: MONGO_INITDB_ROOT_PASSWORD
+              livenessProbe:
+                exec:
+                  command:
+                    - /bin/sh
+                    - -c
+                    - echo 'db.runCommand("ping").ok' | mongosh -u $$MONGO_INITDB_ROOT_USERNAME -p $$MONGO_INITDB_ROOT_PASSWORD
+                initialDelaySeconds: 30
+                timeoutSeconds: 5
+                periodSeconds: 20
+              volumeMounts:
+              - name: data
+                mountPath: /var/db
+        volumeClaimTemplates:
+        - metadata:
+            name: data
+            annotations:
+              k8s.score.dev/source-workload: {{ .SourceWorkload }}
+              k8s.score.dev/resource-uid: {{ .Uid }}
+              k8s.score.dev/resource-guid: {{ .Guid }}
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ .State.service }}
+              app.kubernetes.io/instance: {{ .State.service }}
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 1Gi
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
+      spec:
+        selector:
+          app.kubernetes.io/instance: {{ .State.service }}
+        type: ClusterIP
+        ports:
+        - port: 27017
+          targetPort: 27017
