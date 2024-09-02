@@ -19,10 +19,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
-	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/score-spec/score-go/framework"
 	"gopkg.in/yaml.v3"
@@ -85,29 +82,14 @@ func (p *Provisioner) Match(resUid framework.ResourceUid) bool {
 	return true
 }
 
-func renderTemplateAndDecode(raw string, data interface{}, out interface{}) error {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil
-	}
-	prepared, err := template.New("").
-		Funcs(sprig.FuncMap()).
-		Funcs(template.FuncMap{"encodeSecretRef": util.EncodeSecretReference}).
-		Parse(raw)
+func renderTemplateAndDecode(raw string, data provisioners.TemplateData, out interface{}) error {
+	rendered, err := provisioners.RenderTemplate(raw, data)
 	if err != nil {
-		return fmt.Errorf("failed to parse template: %w", err)
-	}
-	buff := new(bytes.Buffer)
-	if err := prepared.Execute(buff, data); err != nil {
-		return fmt.Errorf("failed to execute template: %w", err)
-	}
-	buffContents := buff.String()
-	if strings.TrimSpace(buff.String()) == "" {
-		return nil
+		return fmt.Errorf("failed to render output: %w", err)
 	}
 	var intermediate interface{}
-	if err := yaml.Unmarshal([]byte(buffContents), &intermediate); err != nil {
-		slog.Debug(fmt.Sprintf("template output was '%s' from template '%s'", buffContents, raw))
+	if err := yaml.Unmarshal([]byte(rendered), &intermediate); err != nil {
+		slog.Debug(fmt.Sprintf("template output was '%s' from template '%s'", rendered, raw))
 		return fmt.Errorf("failed to decode output: %w", err)
 	}
 	err = mapstructure.Decode(intermediate, &out)
@@ -117,36 +99,11 @@ func renderTemplateAndDecode(raw string, data interface{}, out interface{}) erro
 	return nil
 }
 
-// Data is the structure sent to each template during rendering.
-type Data struct {
-	// Guid is a random uuid generated the first time this resource is added to the project.
-	Guid string
-
-	// Uid is the combined id like type.class#id
-	Uid string
-	// Type is always defined as the resource type
-	Type string
-	// Class is the resource class, it defaults to 'default'
-	Class string
-	// Id is the resource id, like 'global-id' or 'workload.res-name'
-	Id string
-
-	Params   map[string]interface{}
-	Metadata map[string]interface{}
-
-	Init   map[string]interface{}
-	State  map[string]interface{}
-	Shared map[string]interface{}
-
-	SourceWorkload   string
-	WorkloadServices map[string]provisioners.NetworkService
-}
-
 func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) (*provisioners.ProvisionOutput, error) {
 	out := &provisioners.ProvisionOutput{}
 
 	// The data payload that gets passed into each template
-	data := Data{
+	data := provisioners.TemplateData{
 		Guid:             input.ResourceGuid,
 		Uid:              input.ResourceUid,
 		Type:             input.ResourceType,
@@ -161,30 +118,30 @@ func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) 
 	}
 
 	init := make(map[string]interface{})
-	if err := renderTemplateAndDecode(p.InitTemplate, &data, &init); err != nil {
+	if err := renderTemplateAndDecode(p.InitTemplate, data, &init); err != nil {
 		return nil, fmt.Errorf("init template failed: %w", err)
 	}
 	data.Init = init
 
 	out.ResourceState = make(map[string]interface{})
-	if err := renderTemplateAndDecode(p.StateTemplate, &data, &out.ResourceState); err != nil {
+	if err := renderTemplateAndDecode(p.StateTemplate, data, &out.ResourceState); err != nil {
 		return nil, fmt.Errorf("state template failed: %w", err)
 	}
 	data.State = out.ResourceState
 
 	out.SharedState = make(map[string]interface{})
-	if err := renderTemplateAndDecode(p.SharedStateTemplate, &data, &out.SharedState); err != nil {
+	if err := renderTemplateAndDecode(p.SharedStateTemplate, data, &out.SharedState); err != nil {
 		return nil, fmt.Errorf("shared template failed: %w", err)
 	}
 	data.Shared = util.PatchMap(data.Shared, out.SharedState)
 
 	out.ResourceOutputs = make(map[string]interface{})
-	if err := renderTemplateAndDecode(p.OutputsTemplate, &data, &out.ResourceOutputs); err != nil {
+	if err := renderTemplateAndDecode(p.OutputsTemplate, data, &out.ResourceOutputs); err != nil {
 		return nil, fmt.Errorf("outputs template failed: %w", err)
 	}
 
 	out.Manifests = make([]map[string]interface{}, 0)
-	if err := renderTemplateAndDecode(p.ManifestsTemplate, &data, &out.Manifests); err != nil {
+	if err := renderTemplateAndDecode(p.ManifestsTemplate, data, &out.Manifests); err != nil {
 		return nil, fmt.Errorf("manifests template failed: %w", err)
 	}
 

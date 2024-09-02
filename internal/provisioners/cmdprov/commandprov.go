@@ -94,6 +94,20 @@ func decodeBinary(uri string) (string, error) {
 }
 
 func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) (*provisioners.ProvisionOutput, error) {
+	data := provisioners.TemplateData{
+		Guid:             input.ResourceGuid,
+		Uid:              input.ResourceUid,
+		Type:             input.ResourceType,
+		Class:            input.ResourceClass,
+		Id:               input.ResourceId,
+		Params:           input.ResourceParams,
+		Metadata:         input.ResourceMetadata,
+		State:            input.ResourceState,
+		Shared:           input.SharedState,
+		SourceWorkload:   input.SourceWorkload,
+		WorkloadServices: input.WorkloadServices,
+	}
+
 	bin, err := decodeBinary(p.Uri())
 	if err != nil {
 		return nil, err
@@ -111,6 +125,11 @@ func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) 
 		if arg == "<mode>" {
 			args[i] = "provision"
 		}
+		rendered, err := provisioners.RenderTemplate(arg, data)
+		if err != nil {
+			return nil, err
+		}
+		args[i] = rendered
 	}
 
 	cmd := exec.CommandContext(ctx, bin, args...)
