@@ -254,7 +254,6 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 				Labels:      commonLabels,
 			},
 			Spec: v1.StatefulSetSpec{
-				Replicas: internal.Ref(int32(1)),
 				Selector: &machineryMeta.LabelSelector{
 					MatchLabels: map[string]string{
 						SelectorLabelInstance: commonLabels[SelectorLabelInstance],
