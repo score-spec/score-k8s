@@ -173,7 +173,6 @@ metadata:
     app.kubernetes.io/name: example
   name: example
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/instance: example-abcdef
