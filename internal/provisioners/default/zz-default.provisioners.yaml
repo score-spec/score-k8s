@@ -618,3 +618,117 @@
         ports:
         - port: 27017
           targetPort: 27017
+
+- uri: template://default-provisioners/rabbitmq
+  type: amqp
+  init: |
+    randomVHost: vhost-{{ randAlpha 8 }}
+    randomUsername: user-{{ randAlpha 8 }}
+    randomPassword: {{ randAlphaNum 16 | quote }}
+  state: |
+    service: rabbitmq-{{ .SourceWorkload }}-{{ substr 0 8 .Guid | lower }}
+    vhost: {{ dig "vhost" .Init.randomVHost .State | quote }}
+    username: {{ dig "username" .Init.randomUsername .State | quote }}
+    password: {{ dig "password" .Init.randomPassword .State | quote }}
+  outputs: |
+    host: {{ .State.service }}
+    port: 5672
+    vhost: {{ .State.vhost }}
+    username: {{ .State.username }}
+    password: {{ .State.password }}
+  manifests: |
+    - apiVersion: v1
+      kind: Secret
+      metadata:
+        name: {{ .State.service }}-secret
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}-secret
+          app.kubernetes.io/instance: {{ .State.service }}
+      data:
+        RABBITMQ_DEFAULT_VHOST: {{ .State.vhost | b64enc }}
+        RABBITMQ_DEFAULT_USER: {{ .State.username | b64enc }}
+        RABBITMQ_DEFAULT_PASS: {{ .State.password | b64enc }}
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
+      spec:
+        serviceName: {{ .State.service }}
+        replicas: 1
+        selector:
+          matchLabels:
+            app.kubernetes.io/instance: {{ .State.service }}
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ .State.service }}
+              app.kubernetes.io/instance: {{ .State.service }}
+          spec:
+            containers:
+              - name: rabbitmq
+                image: rabbitmq:3-management
+                ports:
+                  - name: amqp
+                    containerPort: 5672
+                  - name: management
+                    containerPort: 15672
+                envFrom:
+                  - secretRef:
+                      name: {{ .State.service }}-secret
+                volumeMounts:
+                  - name: data
+                    mountPath: /var/lib/rabbitmq
+                readinessProbe:
+                  exec:
+                    command:
+                      - rabbitmq-diagnostics
+                      - -q
+                      - check_port_connectivity
+                  periodSeconds: 3
+                  initialDelaySeconds: 30
+                  timeoutSeconds: 5
+        volumeClaimTemplates:
+          - metadata:
+              name: data
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 3Gi
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
+      spec:
+        ports:
+          - port: 5672
+            targetPort: 5672
+            name: amqp
+          - port: 15672
+            targetPort: 15672
+            name: management
+        selector:
+          app.kubernetes.io/instance: {{ .State.service }}
+        type: ClusterIP
