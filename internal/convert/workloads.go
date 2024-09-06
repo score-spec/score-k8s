@@ -186,7 +186,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		manifests = append(manifests, &coreV1.Service{
 			TypeMeta: machineryMeta.TypeMeta{Kind: "Service", APIVersion: "v1"},
 			ObjectMeta: machineryMeta.ObjectMeta{
-				Name:        WorkloadServiceName(workloadName),
+				Name:        WorkloadServiceName(workloadName, spec.Metadata),
 				Annotations: topLevelAnnotations,
 				Labels:      commonLabels,
 			},
@@ -279,8 +279,11 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 	return manifests, nil
 }
 
-func WorkloadServiceName(workloadName string) string {
-	return fmt.Sprintf("%s-svc", workloadName)
+func WorkloadServiceName(workloadName string, specMetadata map[string]interface{}) string {
+	if d, ok := internal.FindAnnotation(specMetadata, internal.WorkloadServiceNameAnnotation); ok {
+		return d
+	}
+	return workloadName
 }
 
 func buildProbe(input scoretypes.HttpProbe) coreV1.ProbeHandler {

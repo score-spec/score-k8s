@@ -173,7 +173,7 @@ func buildWorkloadServices(state *project.State) map[string]NetworkService {
 	out := make(map[string]NetworkService, len(state.Workloads))
 	for workloadName, workloadState := range state.Workloads {
 		ns := NetworkService{
-			ServiceName: convert.WorkloadServiceName(workloadName),
+			ServiceName: convert.WorkloadServiceName(workloadName, state.Workloads[workloadName].Spec.Metadata),
 			Ports:       make(map[string]ServicePort),
 		}
 		if workloadState.Spec.Service != nil {
