@@ -280,7 +280,10 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 }
 
 func WorkloadServiceName(workloadName string) string {
-	return fmt.Sprintf("%s", workloadName)
+	if d, ok := internal.FindAnnotation(spec.Metadata, internal.WorkloadServiceNameAnnotation); ok {
+		return d
+	}
+	return workloadName
 }
 
 func buildProbe(input scoretypes.HttpProbe) coreV1.ProbeHandler {
