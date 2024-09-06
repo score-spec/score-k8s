@@ -208,3 +208,31 @@ resources:
 
 	assert.Contains(t, string(raw), string(raw2))
 }
+
+func TestGenerateMultipleSpecsWithImage(t *testing.T) {
+	td := changeToTempDir(t)
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	assert.NoError(t, err)
+	assert.Equal(t, "", stdout)
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "scoreA.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example-a
+containers:
+  hello:
+    image: foo
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "scoreB.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example-b
+containers:
+  hello:
+    image: foo
+`), 0644))
+	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "--image", "nginx:latest", "scoreA.yaml", "scoreB.yaml",
+	})
+	assert.EqualError(t, err, "cannot use --override-property, --overrides-file, or --image when 0 or more than 1 score files are provided")
+	assert.Equal(t, "", stdout)
+}
