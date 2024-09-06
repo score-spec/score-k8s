@@ -229,7 +229,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 	case WorkloadKindStatefulSet:
 
 		// need to allocate a headless service here
-		headlessServiceName := fmt.Sprintf("%s-headless-svc", workloadName)
+		headlessServiceName := fmt.Sprintf("%s-headless", workloadName)
 		manifests = append(manifests, &coreV1.Service{
 			TypeMeta: machineryMeta.TypeMeta{Kind: "Service", APIVersion: "v1"},
 			ObjectMeta: machineryMeta.ObjectMeta{
@@ -280,7 +280,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 }
 
 func WorkloadServiceName(workloadName string) string {
-	return fmt.Sprintf("%s-svc", workloadName)
+	return fmt.Sprintf("%s", workloadName)
 }
 
 func buildProbe(input scoretypes.HttpProbe) coreV1.ProbeHandler {

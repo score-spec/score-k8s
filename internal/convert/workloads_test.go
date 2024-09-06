@@ -150,7 +150,7 @@ metadata:
     app.kubernetes.io/instance: example-abcdef
     app.kubernetes.io/managed-by: score-k8s
     app.kubernetes.io/name: example
-  name: example-svc
+  name: example
 spec:
   ports:
   - name: web
