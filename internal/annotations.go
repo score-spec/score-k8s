@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	AnnotationPrefix       = "k8s.score.dev/"
-	WorkloadKindAnnotation = AnnotationPrefix + "kind"
+	AnnotationPrefix              = "k8s.score.dev/"
+	WorkloadKindAnnotation        = AnnotationPrefix + "kind"
+	WorkloadServiceNameAnnotation = AnnotationPrefix + "service-name"
 )
 
 func ListAnnotations(metadata map[string]interface{}) []string {
