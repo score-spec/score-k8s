@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/score-spec/score-k8s/internal/project"
+	"github.com/score-spec/score-k8s/internal/provisioners/loader"
 )
 
 func TestInitNominal(t *testing.T) {
@@ -118,5 +119,38 @@ func TestInitNominal_run_twice(t *testing.T) {
 		assert.Equal(t, map[string]framework.ScoreWorkloadState[project.WorkloadExtras]{}, sd.State.Workloads)
 		assert.Equal(t, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{}, sd.State.Resources)
 		assert.Equal(t, map[string]interface{}{}, sd.State.SharedState)
+	}
+}
+
+func TestInitWithProvisioners(t *testing.T) {
+	td := t.TempDir()
+	wd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(td))
+	defer func() {
+		require.NoError(t, os.Chdir(wd))
+	}()
+
+	td2 := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(td2, "one.provisioners.yaml"), []byte(`
+- uri: template://one
+  type: thing
+  outputs: "{}"
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(td2, "two.provisioners.yaml"), []byte(`
+- uri: template://two
+  type: thing
+  outputs: "{}"
+`), 0644))
+
+	stdout, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--provisioners", filepath.Join(td2, "one.provisioners.yaml"), "--provisioners", "file://" + filepath.Join(td2, "two.provisioners.yaml")})
+	assert.NoError(t, err)
+	assert.Equal(t, "", stdout)
+	assert.NotEqual(t, "", strings.TrimSpace(stderr))
+
+	provs, err := loader.LoadProvisionersFromDirectory(filepath.Join(td, ".score-k8s"), loader.DefaultSuffix)
+	assert.NoError(t, err)
+	if assert.Greater(t, len(provs), 2) {
+		assert.Equal(t, "template://two", provs[0].Uri())
+		assert.Equal(t, "template://one", provs[1].Uri())
 	}
 }
