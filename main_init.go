@@ -15,6 +15,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -22,16 +23,19 @@ import (
 	"github.com/pkg/errors"
 	"github.com/score-spec/score-go/framework"
 	scoretypes "github.com/score-spec/score-go/types"
+	"github.com/score-spec/score-go/uriget"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
 	"github.com/score-spec/score-k8s/internal/project"
 	"github.com/score-spec/score-k8s/internal/provisioners/default"
+	"github.com/score-spec/score-k8s/internal/provisioners/loader"
 )
 
 const (
 	initCmdFileFlag         = "file"
 	initCmdFileNoSampleFlag = "no-sample"
+	initCmdProvisionerFlag  = "provisioners"
 )
 
 var initCmd = &cobra.Command{
@@ -43,10 +47,20 @@ empty state and default provisioners file into the '.score-k8s' subdirectory.
 
 The '.score-k8s' directory contains state that will be used to generate any Kubernetes resource manifests including
 potentially sensitive data and raw secrets, so this should not be checked into generic source control.
+
+Custom provisioners can be installed by uri using the --provisioners flag. The provisioners will be installed and take
+precedence in the order they are defined over the default provisioners. If init has already been called with provisioners
+the new provisioners will take precedence.
 `,
 	Example: `
   # Initialise a new score-k8s project
-  score-k8s init`,
+  score-k8s init
+
+  # Or disable the default score file generation if you already have a score file
+  score-k8s init --no-sample
+
+  # Optionally loading in provisoners from a remote url
+  score-k8s init --provisioners https://raw.githubusercontent.com/user/repo/main/example.yaml`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
@@ -126,6 +140,26 @@ potentially sensitive data and raw secrets, so this should not be checked into g
 			slog.Info("Skipping creation of initial Score file since it already exists", "file", initCmdScoreFile)
 		}
 
+		if v, _ := cmd.Flags().GetStringArray(initCmdProvisionerFlag); len(v) > 0 {
+			for i, vi := range v {
+				data, err := uriget.GetFile(cmd.Context(), vi)
+				if err != nil {
+					return fmt.Errorf("failed to load provisioner %d: %w", i+1, err)
+				}
+				if err := loader.SaveProvisionerToDirectory(sd.Path, vi, data); err != nil {
+					return fmt.Errorf("failed to save provisioner %d: %w", i+1, err)
+				}
+			}
+		}
+
+		if provs, err := loader.LoadProvisionersFromDirectory(sd.Path, loader.DefaultSuffix); err != nil {
+			return fmt.Errorf("failed to load existing provisioners: %w", err)
+		} else {
+			slog.Debug(fmt.Sprintf("Successfully loaded %d resource provisioners", len(provs)))
+		}
+
+		slog.Info(fmt.Sprintf("Read more about the Score specification at https://docs.score.dev/docs/"))
+
 		return nil
 	},
 }
@@ -133,6 +167,7 @@ potentially sensitive data and raw secrets, so this should not be checked into g
 func init() {
 	initCmd.Flags().StringP(initCmdFileFlag, "f", "score.yaml", "The score file to initialize")
 	initCmd.Flags().Bool(initCmdFileNoSampleFlag, false, "Disable generation of the sample score file")
+	initCmd.Flags().StringArray(initCmdProvisionerFlag, nil, "A provisioners file to install. May be specified multiple times. Supports http://host/file, https://host/file, git-ssh://git@host/repo.git/file, and  git-https://host/repo.git/file formats.")
 
 	rootCmd.AddCommand(initCmd)
 }

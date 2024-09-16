@@ -35,14 +35,16 @@ For details of how the standard "template" provisioner works, see the `template:
 
 `score-k8s` comes with out-of-the-box support for:
 
-| Type          | Class   | Params                 | Output                                                                                                                                                          |
-| ------------- | ------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| volume        | default | (none)                 | `source`                                                                                                                                                        |
-| redis         | default | (none)                 | `host`, `port`, `username`, `password`                                                                                                                          |
-| postgres      | default | (none)                 | `host`, `port`, `name` (aka `database`), `username`, `password`                                                                                                 |
-| mysql         | default | (none)                 | `host`, `port`, `name` (aka `database`), `username`, `password`                                                                                                 |
-| dns           | default | (none)                 | `host`                                                                                                                                                          |
-| route         | default | `host`, `path`, `port` |                                                                                                                                                                 |
+| Type          | Class   | Params                 | Output                                                          |
+| ------------- | ------- | ---------------------- |-----------------------------------------------------------------|
+| volume        | default | (none)                 | `source`                                                        |
+| redis         | default | (none)                 | `host`, `port`, `username`, `password`                          |
+| postgres      | default | (none)                 | `host`, `port`, `name` (aka `database`), `username`, `password` |
+| mysql         | default | (none)                 | `host`, `port`, `name` (aka `database`), `username`, `password` |
+| dns           | default | (none)                 | `host`                                                          |
+| route         | default | `host`, `path`, `port` |                                                                 |
+| mongodb       | default | (none)                 | `host`, `port`, `username`, `password`, `name`, `connection`    |
+| ampq          | default | (nont)                 | `host`, `port`, `username`, `password`, `vhost`                 |
 
 Users are encouraged to write their own custom provisioners to support new resource types or to modify the implementations above.
 
@@ -65,11 +67,17 @@ Examples:
 
   # Initialise a new score-k8s project
   score-k8s init
+  # Or disable the default score file generation if you already have a score file
+  score-k8s init --no-sample
+
+  # Optionally loading in provisoners from a remote url
+  score-k8s init --provisioners https://raw.githubusercontent.com/user/repo/main/example.yaml
 
 Flags:
-  -f, --file string   The score file to initialize (default "score.yaml")
-  -h, --help          help for init
-      --no-sample     Disable generation of the sample score file
+  -f, --file string                The score file to initialize (default "score.yaml")
+  -h, --help                       help for init
+      --no-sample                  Disable generation of the sample score file
+      --provisioners stringArray   A provisioners file to install. May be specified multiple times. Supports http://host/file, https://host/file, git-ssh://git@host/repo.git/file, and  git-https://host/repo.git/file formats.
 ```
 
 ### Generate
