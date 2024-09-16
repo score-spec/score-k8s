@@ -29,8 +29,12 @@ func Test_generateSecretRefEnvVarName(t *testing.T) {
 	assert.Equal(t, "__ref_pCu17eplmVon10uSLW8i8A", generateSecretRefEnvVarName("hello", "dan"))
 }
 
+func noSubstitutesFunction(s string) (string, error) {
+	panic("should not be called")
+}
+
 func Test_convertContainerVariable_0(t *testing.T) {
-	out, err := convertContainerVariable("KEY", "VALUE", nil)
+	out, err := convertContainerVariable("KEY", "VALUE", noSubstitutesFunction)
 	assert.NoError(t, err)
 	assert.Equal(t, []coreV1.EnvVar{{Name: "KEY", Value: "VALUE", ValueFrom: nil}}, out)
 }

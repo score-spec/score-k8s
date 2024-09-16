@@ -31,7 +31,7 @@ import (
 func Test_convertContainerVolume_not_found(t *testing.T) {
 	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
 		Source: "unknown",
-	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{}, nil)
+	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{}, noSubstitutesFunction)
 	assert.EqualError(t, err, "source: resource 'unknown' does not exist")
 }
 
@@ -42,7 +42,7 @@ func Test_convertContainerVolume_no_outputs(t *testing.T) {
 		"volume.default#my-workload.thing": {
 			Outputs: map[string]interface{}{},
 		},
-	}, nil)
+	}, noSubstitutesFunction)
 	assert.EqualError(t, err, "failed to convert resource 'volume.default#my-workload.thing' outputs into volume: either 'source' or 'claimSpec' required")
 }
 
@@ -55,7 +55,7 @@ func Test_convertContainerVolume_empty_source(t *testing.T) {
 				"source": map[string]interface{}{},
 			},
 		},
-	}, nil)
+	}, noSubstitutesFunction)
 	assert.EqualError(t, err, "failed to convert resource 'volume.default#my-workload.thing' outputs into volume: source is empty")
 }
 
@@ -72,7 +72,7 @@ func Test_convertContainerVolume_bad_source(t *testing.T) {
 				},
 			},
 		},
-	}, nil)
+	}, noSubstitutesFunction)
 	assert.EqualError(t, err, "failed to convert resource 'volume.default#my-workload.thing' outputs into a Kubernetes volume: json: unknown field \"fruit\"")
 }
 
@@ -87,7 +87,7 @@ func Test_convertContainerVolume_bad_claim(t *testing.T) {
 				},
 			},
 		},
-	}, nil)
+	}, noSubstitutesFunction)
 	assert.EqualError(t, err, "failed to convert resource 'volume.default#my-workload.thing' outputs into a Kubernetes volume: json: unknown field \"fruit\"")
 }
 
@@ -107,7 +107,7 @@ func Test_convertContainerVolume_nominal_source(t *testing.T) {
 				},
 			},
 		},
-	}, nil)
+	}, noSubstitutesFunction)
 	assert.Equal(t, coreV1.VolumeMount{
 		Name:      "vol-0",
 		ReadOnly:  true,
@@ -142,7 +142,7 @@ func Test_convertContainerVolume_nominal_claim(t *testing.T) {
 				},
 			},
 		},
-	}, nil)
+	}, noSubstitutesFunction)
 	assert.Equal(t, coreV1.VolumeMount{
 		Name:      "vol-0",
 		ReadOnly:  true,
