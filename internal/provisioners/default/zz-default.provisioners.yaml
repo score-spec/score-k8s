@@ -182,13 +182,16 @@
               k8s.score.dev/resource-uid: {{ .Uid }}
               k8s.score.dev/resource-guid: {{ .Guid }}
           spec:
+            automountServiceAccountToken: false
             containers:
             - name: postgres-db
-              image: postgres:16
+              image: postgres:17-alpine
               ports:
               - name: postgres
                 containerPort: 5432
               env:
+              - name: PGDATA
+                value: /var/lib/postgresql/data/pgdata
               - name: POSTGRES_USER
                 value: {{ .State.username | quote }}
               - name: POSTGRES_PASSWORD
@@ -201,6 +204,14 @@
               volumeMounts:
               - name: pv-data
                 mountPath: /var/lib/postgresql/data
+              securityContext:
+                runAsUser: 1000
+                runAsGroup: 1000
+                allowPrivilegeEscalation: false
+                privileged: false
+                capabilities:
+                  drop:
+                    - ALL
               readinessProbe:
                 exec:
                   command:
@@ -210,6 +221,11 @@
                   - -d
                   - {{ .State.database | quote }}
                 periodSeconds: 3
+            securityContext:
+              runAsNonRoot: true
+              fsGroup: 1000
+              seccompProfile:
+                type: RuntimeDefault
         volumeClaimTemplates:
         - metadata:
             name: pv-data
