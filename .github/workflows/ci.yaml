@@ -1,11 +1,10 @@
-name: release
+name: ci
 on:
-  push:
-    tags:
-      - 0.**
-permissions: write-all
+  pull_request:
+permissions:
+  contents: read
 jobs:
-  release:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,12 +17,15 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
-      - name: Run GoReleaser
+      - name: Run Go Tests
+        run: go test ./... -cover -race
+      - name: Build binary
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          args: build --snapshot
+      - name: Install license check tool
+        run: go install github.com/google/addlicense@latest
+      - name: Check licenses
+        run: addlicense -l apache -check -v -ignore '**/*.yaml' -c Humanitec ./*.go ./internal/
