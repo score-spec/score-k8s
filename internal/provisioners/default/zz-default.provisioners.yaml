@@ -573,6 +573,7 @@
               k8s.score.dev/resource-uid: {{ .Uid }}
               k8s.score.dev/resource-guid: {{ .Guid }}
           spec:
+            automountServiceAccountToken: false
             containers:
             - name: mongo-db
               image: mongo:latest
@@ -596,9 +597,28 @@
                 initialDelaySeconds: 30
                 timeoutSeconds: 5
                 periodSeconds: 20
+              securityContext:
+                runAsUser: 1001
+                runAsGroup: 1001
+                allowPrivilegeEscalation: false
+                privileged: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
               volumeMounts:
               - name: data
-                mountPath: /var/db
+                mountPath: /data/db
+              - name: tmp
+                mountPath: /tmp
+            securityContext:
+              runAsNonRoot: true
+              fsGroup: 1001
+              seccompProfile:
+                type: RuntimeDefault
+            volumes:
+              - name: tmp
+                emptyDir: {}
         volumeClaimTemplates:
         - metadata:
             name: data
