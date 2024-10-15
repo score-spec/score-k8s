@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /usr/local/bin/score-k8s .
 FROM scratch
 
 # Set the current working directory inside the container.
-WORKDIR /score-compose
+WORKDIR /score-k8s
 
 # Copy the binary from the builder image.
 COPY --from=builder /usr/local/bin/score-k8s /usr/local/bin/score-k8s
