@@ -38,5 +38,5 @@ jobs:
           tags: score-k8s:test
       - name: Test docker image
         run: |
-          docker run --rm -it score-k8s:test --version
-          docker run --rm -it score-k8s:test init
+          docker run --rm score-k8s:test --version
+          docker run --rm score-k8s:test init
