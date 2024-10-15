@@ -1,0 +1,6 @@
+*/
+!go.mod
+!go.sum
+!.git/
+!internal/
+!main.go/
