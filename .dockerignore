@@ -3,4 +3,7 @@
 !go.sum
 !.git/
 !internal/
-!main.go/
+!main.go
+!main_init.go
+!main_generate.go
+!main_resources.go/

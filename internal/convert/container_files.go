@@ -92,7 +92,11 @@ func convertContainerFile(
 				Name: mount.Name,
 				VolumeSource: coreV1.VolumeSource{
 					ConfigMap: &coreV1.ConfigMapVolumeSource{
-						Items:                []coreV1.KeyToPath{{"file", filepath.Base(fileElem.Target), mountMode}},
+						Items: []coreV1.KeyToPath{{
+							Key:  "file",
+							Path: filepath.Base(fileElem.Target),
+							Mode: mountMode,
+						}},
 						LocalObjectReference: coreV1.LocalObjectReference{Name: configMapName},
 					},
 				},
@@ -107,7 +111,10 @@ func convertContainerFile(
 			VolumeSource: coreV1.VolumeSource{
 				Secret: &coreV1.SecretVolumeSource{
 					SecretName: refs[0].Name,
-					Items:      []coreV1.KeyToPath{{refs[0].Key, filepath.Base(fileElem.Target), mountMode}},
+					Items: []coreV1.KeyToPath{{
+						Key:  refs[0].Key,
+						Path: filepath.Base(fileElem.Target),
+						Mode: mountMode}},
 				},
 			},
 		}, nil
