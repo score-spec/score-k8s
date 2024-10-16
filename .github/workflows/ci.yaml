@@ -42,5 +42,5 @@ jobs:
         run: |
           docker run --rm score-k8s:test --version
           docker run -v .:/score-k8s --rm score-k8s:test init
-          chmod 0755 score.yaml
+          ls | grep score.yaml
           cat score.yaml
