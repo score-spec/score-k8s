@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/score-spec/score-k8s/internal/project"
+	"github.com/score-spec/score-k8s/internal/provisioners"
 	"github.com/score-spec/score-k8s/internal/provisioners/loader"
 )
 
@@ -150,18 +152,10 @@ func TestInitWithProvisioners(t *testing.T) {
 
 	provs, err := loader.LoadProvisionersFromDirectory(filepath.Join(td, ".score-k8s"), loader.DefaultSuffix)
 	assert.NoError(t, err)
-	if assert.Greater(t, len(provs), 2) {
-		expectedProvisioners := map[string]bool{
-			"template://one": true,
-			"template://two": true,
-		}
-		for _, prov := range provs {
-			if _, found := expectedProvisioners[prov.Uri()]; found {
-				delete(expectedProvisioners, prov.Uri())
-			}
-		}
-		for provisioner := range expectedProvisioners {
-			assert.Fail(t, fmt.Sprintf("Expected provisioner '%s' not found", provisioner))
-		}
+	expectedProvisionerUris := []string{"template://one", "template://two"}
+	for _, expectedUri := range expectedProvisionerUris {
+		assert.True(t, slices.ContainsFunc(provs, func(p provisioners.Provisioner) bool {
+			return p.Uri() == expectedUri
+		}), fmt.Sprintf("Expected provisioner '%s' not found", expectedUri))
 	}
 }
