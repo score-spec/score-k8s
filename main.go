@@ -54,7 +54,6 @@ func init() {
 	rootCmd.Version = version.BuildVersionString()
 	rootCmd.SetVersionTemplate(`{{with .Name}}{{printf "%s " .}}{{end}}{{printf "%s" .Version}}
 `)
-	rootCmd.CompletionOptions = cobra.CompletionOptions{HiddenDefaultCmd: true}
 	rootCmd.PersistentFlags().Bool("quiet", false, "Mute any logging output")
 	rootCmd.PersistentFlags().CountP("verbose", "v", "Increase log verbosity and detail by specifying this flag one or more times")
 }
