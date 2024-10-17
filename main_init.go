@@ -126,7 +126,7 @@ the new provisioners will take precedence.
 						},
 					},
 				}
-				if f, err := os.OpenFile(initCmdScoreFile, os.O_CREATE|os.O_WRONLY, 0600); err != nil {
+				if f, err := os.OpenFile(initCmdScoreFile, os.O_CREATE|os.O_WRONLY, 0755); err != nil {
 					return errors.Wrap(err, "failed to open empty Score file")
 				} else {
 					defer f.Close()
