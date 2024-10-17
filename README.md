@@ -118,6 +118,32 @@ Flags:
       --patch-manifests stringArray     An optional set of <kind|*>/<name|*>/path=key operations for the output manifests
 ```
 
+### Shell Completions
+
+```
+$ score-k8s completion --help
+Generate the autocompletion script for score-k8s for the specified shell.
+See each sub-command's help for details on how to use the generated script.
+
+Usage:
+  score-k8s completion [command]
+
+Available Commands:
+  bash        Generate the autocompletion script for bash
+  fish        Generate the autocompletion script for fish
+  powershell  Generate the autocompletion script for powershell
+  zsh         Generate the autocompletion script for zsh
+
+Flags:
+  -h, --help   help for completion
+
+Global Flags:
+      --quiet           Mute any logging output
+  -v, --verbose count   Increase log verbosity and detail by specifying this flag one or more times
+
+Use "score-k8s completion [command] --help" for more information about a command.
+```
+
 ## Installation
 
 Either, install through Homebrew for macOS and supported Linux distributions:
