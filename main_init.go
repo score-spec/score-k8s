@@ -28,7 +28,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/score-spec/score-k8s/internal/project"
-	"github.com/score-spec/score-k8s/internal/provisioners/default"
+	_default "github.com/score-spec/score-k8s/internal/provisioners/default"
 	"github.com/score-spec/score-k8s/internal/provisioners/loader"
 )
 
@@ -158,7 +158,7 @@ the new provisioners will take precedence.
 			slog.Debug(fmt.Sprintf("Successfully loaded %d resource provisioners", len(provs)))
 		}
 
-		slog.Info(fmt.Sprintf("Read more about the Score specification at https://docs.score.dev/docs/"))
+		slog.Info("Read more about the Score specification at https://docs.score.dev/docs/")
 
 		return nil
 	},
@@ -167,7 +167,11 @@ the new provisioners will take precedence.
 func init() {
 	initCmd.Flags().StringP(initCmdFileFlag, "f", "score.yaml", "The score file to initialize")
 	initCmd.Flags().Bool(initCmdFileNoSampleFlag, false, "Disable generation of the sample score file")
-	initCmd.Flags().StringArray(initCmdProvisionerFlag, nil, "A provisioners file to install. May be specified multiple times. Supports http://host/file, https://host/file, git-ssh://git@host/repo.git/file, and  git-https://host/repo.git/file formats.")
-
+	initCmd.Flags().StringArray(initCmdProvisionerFlag, nil, "Provisioner files to install. May be specified multiple times. Supports:\n"+
+		"- HTTP        : http://host/file\n"+
+		"- HTTPS       : https://host/file\n"+
+		"- Git (SSH)   : git-ssh://git@host/repo.git/file\n"+
+		"- Git (HTTPS) : git-https://host/repo.git/file\n"+
+		"- OCI         : oci://[registry/][namespace/]repository[:tag|@digest]")
 	rootCmd.AddCommand(initCmd)
 }
