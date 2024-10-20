@@ -134,7 +134,7 @@ Or, download the binaries for your platform from the [latest Github releases](ht
 $ wget https://github.com/score-spec/score-k8s/releases/download/<x.y.z>/score-k8s_<x.y.z>_<os_system>.tar.gz
 ```
 
-Or, install the Go module directly (Go > 1.22):
+Or, install the Go module directly (Go > 1.23):
 
 ```
 $ go install -v github.com/score-spec/score-k8s@latest
