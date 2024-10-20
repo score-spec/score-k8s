@@ -50,6 +50,16 @@
       data:
         key: {{ .Init.key }}
 
+# The 'cmd' scheme has a "host" + path component that indicates the path to the binary to execute. If the host starts
+# with "." it is interpreted as a relative path, if it starts with "~" it resolves to the home directory.
+- uri: cmd://bash#example-provisioner
+  type: example-provisioner-resource
+  class: default
+  id: specific
+  # (Optional) additional args that the binary gets run with
+  # If any of the args are '<mode>' it will be replaced with "provision"
+  args: ["-c", "echo '{\"resource_outputs\":{\"key\":\"value\"},\"manifests\":[]}'"]
+
 # The default provisioner for service resources, this expects a workload and port name and will return the hostname and
 # port required to contact it. This will validate that the workload and port exist, but won't enforce a dependency
 # relationship yet.
@@ -64,16 +74,6 @@
     {{ if not $p }}{{ fail "unknown service port" }}{{ end }}
     hostname: {{ $w.ServiceName | quote }}
     port: {{ $p.TargetPort }}
-    
-# The 'cmd' scheme has a "host" + path component that indicates the path to the binary to execute. If the host starts
-# with "." it is interpreted as a relative path, if it starts with "~" it resolves to the home directory.
-- uri: cmd://bash#example-provisioner
-  type: example-provisioner-resource
-  class: default
-  id: specific
-  # (Optional) additional args that the binary gets run with
-  # If any of the args are '<mode>' it will be replaced with "provision"
-  args: ["-c", "echo '{\"resource_outputs\":{\"key\":\"value\"},\"manifests\":[]}'"]
 
 # As an example we have a 'volume' type which returns an emptyDir volume.
 # In production or for real applications you may want to replace this with a provisioner for a tmpfs, host path, or
