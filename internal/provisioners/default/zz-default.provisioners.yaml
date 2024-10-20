@@ -50,6 +50,21 @@
       data:
         key: {{ .Init.key }}
 
+# The default provisioner for service resources, this expects a workload and port name and will return the hostname and
+# port required to contact it. This will validate that the workload and port exist, but won't enforce a dependency
+# relationship yet.
+- uri: template://default-provisioners/service-port
+  type: service-port
+  outputs: |
+    {{ if not .Params.workload }}{{ fail "expected 'workload' param for the target workload name" }}{{ end }}
+    {{ if not .Params.port }}{{ fail "expected 'port' param for the name of the target workload service port" }}{{ end }}
+    {{ $w := (index .WorkloadServices .Params.workload) }}
+    {{ if not $w }}{{ fail "unknown workload" }}{{ end }}
+    {{ $p := (index $w.Ports .Params.port) }}
+    {{ if not $p }}{{ fail "unknown service port" }}{{ end }}
+    hostname: {{ $w.ServiceName | quote }}
+    port: {{ $p.TargetPort }}
+    
 # The 'cmd' scheme has a "host" + path component that indicates the path to the binary to execute. If the host starts
 # with "." it is interpreted as a relative path, if it starts with "~" it resolves to the home directory.
 - uri: cmd://bash#example-provisioner
