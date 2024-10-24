@@ -798,3 +798,118 @@
         selector:
           app.kubernetes.io/instance: {{ .State.service }}
         type: ClusterIP
+
+- uri: template://default-provisioners/mssql
+  type: mssql
+  init: |
+    randomDatabase: db-{{ randAlpha 8 }}
+    randomPassword: {{ randAlphaNum 16 | quote }}
+  state: |
+    service: mssql-{{ .SourceWorkload }}-{{ substr 0 8 .Guid | lower }}
+    database: {{ dig "database" .Init.randomDatabase .State | quote }}
+    password: {{ dig "password" .Init.randomPassword .State | quote }}
+  outputs: |
+    host: {{ .State.service }}
+    port: 1433
+    name: {{ .State.database }}
+    password: {{ encodeSecretRef .State.service "MSSQL_SA_PASSWORD" }}
+  manifests: |
+    - apiVersion: v1
+      kind: Secret
+      metadata:
+        name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
+      data:
+        MSSQL_SA_PASSWORD: {{ .State.password | b64enc }}
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
+      spec:
+        replicas: 1
+        serviceName: {{ .State.service }}
+        selector:
+          matchLabels:
+            app.kubernetes.io/instance: {{ .State.service }}
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ .State.service }}
+              app.kubernetes.io/instance: {{ .State.service }}
+            annotations:
+              k8s.score.dev/source-workload: {{ .SourceWorkload }}
+              k8s.score.dev/resource-uid: {{ .Uid }}
+              k8s.score.dev/resource-guid: {{ .Guid }}
+          spec:
+            containers:
+            - name: mssql-db
+              image: mcr.microsoft.com/mssql/server:latest
+              ports:
+              - name: mssql
+                containerPort: 1433
+              env:
+              - name: ACCEPT_EULA
+                value: "Y"
+              - name: MSSQL_ENABLE_HADR
+                value: "1"
+              - name: MSSQL_AGENT_ENABLED
+                value: "1"
+              - name: MSSQL_SA_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ .State.service }}
+                    key: MSSQL_SA_PASSWORD
+              volumeMounts:
+              - name: mssql
+                mountPath: "/var/opt/mssql"
+        volumeClaimTemplates:
+        - metadata:
+            name: mssql
+            annotations:
+              k8s.score.dev/source-workload: {{ .SourceWorkload }}
+              k8s.score.dev/resource-uid: {{ .Uid }}
+              k8s.score.dev/resource-guid: {{ .Guid }}
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ .State.service }}
+              app.kubernetes.io/instance: {{ .State.service }}
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 1Gi
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{ .State.service }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
+      spec:
+        selector:
+          app.kubernetes.io/instance: {{ .State.service }}
+        type: ClusterIP
+        ports:
+        - port: 1433
+          targetPort: 1433
