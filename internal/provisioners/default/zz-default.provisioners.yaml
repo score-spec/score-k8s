@@ -807,11 +807,13 @@
   state: |
     service: mssql-{{ .SourceWorkload }}-{{ substr 0 8 .Guid | lower }}
     database: {{ dig "database" .Init.randomDatabase .State | quote }}
+    username: sa
     password: {{ dig "password" .Init.randomPassword .State | quote }}
   outputs: |
     host: {{ .State.service }}
     port: 1433
     name: {{ .State.database }}
+    username: {{ .State.username }}
     password: {{ encodeSecretRef .State.service "MSSQL_SA_PASSWORD" }}
   manifests: |
     - apiVersion: v1
