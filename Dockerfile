@@ -12,7 +12,7 @@ RUN go mod download
 
 # Copy the entire project and build it.
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /usr/local/bin/score-k8s .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /usr/local/bin/score-k8s ./cmd/score-k8s
 
 # We can use scratch since we don't rely on any linux libs or state.
 FROM scratch
