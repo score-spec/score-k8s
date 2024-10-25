@@ -28,9 +28,9 @@ jobs:
           version: '~> v2'
           args: build --snapshot
       - name: Install license check tool
-        run: go install github.com/google/addlicense@latest
+        run: go install github.com/google/addlicense@v1
       - name: Check licenses
-        run: addlicense -l apache -check -v -ignore '**/*.yaml' -c Humanitec ./*.go ./internal/
+        run: addlicense -l apache -check -v -ignore '**/*.yaml' -c Humanitec ./cmd ./internal/
       - name: Build docker image
         uses: docker/build-push-action@v6
         with:
