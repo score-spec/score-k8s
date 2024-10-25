@@ -2,8 +2,5 @@
 !go.mod
 !go.sum
 !.git/
+!cmd/
 !internal/
-!main.go
-!main_init.go
-!main_generate.go
-!main_resources.go/
