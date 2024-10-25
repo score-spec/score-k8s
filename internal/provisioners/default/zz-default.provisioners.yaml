@@ -802,17 +802,17 @@
 - uri: template://default-provisioners/mssql
   type: mssql
   init: |
-    randomDatabase: db-{{ randAlpha 8 }}
     randomPassword: {{ randAlphaNum 16 | quote }}
   state: |
     service: mssql-{{ .SourceWorkload }}-{{ substr 0 8 .Guid | lower }}
-    database: {{ dig "database" .Init.randomDatabase .State | quote }}
+    database: master
     username: sa
     password: {{ dig "password" .Init.randomPassword .State | quote }}
   outputs: |
-    host: {{ .State.service }}
+    server: {{ .State.service }}
     port: 1433
-    name: {{ .State.database }}
+    connection: "Server=tcp:{{ .State.service }},1433;Initial Catalog={{ .State.database }};User ID={{ .State.username }};Password={{ encodeSecretRef .State.service "MSSQL_SA_PASSWORD" }}"
+    database: {{ .State.database }}
     username: {{ .State.username }}
     password: {{ encodeSecretRef .State.service "MSSQL_SA_PASSWORD" }}
   manifests: |
