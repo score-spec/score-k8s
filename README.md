@@ -44,7 +44,8 @@ For details of how the standard "template" provisioner works, see the `template:
 | dns           | default | (none)                 | `host`                                                          |
 | route         | default | `host`, `path`, `port` |                                                                 |
 | mongodb       | default | (none)                 | `host`, `port`, `username`, `password`, `name`, `connection`    |
-| ampq          | default | (nont)                 | `host`, `port`, `username`, `password`, `vhost`                 |
+| ampq          | default | (none)                 | `host`, `port`, `username`, `password`, `vhost`                 |
+| mssql         | default | (none)                 | `server`, `port`, `database`, `password`                        |
 
 Users are encouraged to write their own custom provisioners to support new resource types or to modify the implementations above.
 
