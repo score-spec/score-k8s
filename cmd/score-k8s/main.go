@@ -1,4 +1,11 @@
-package score_k8s
+/*
+Apache Score
+Copyright 2022 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+*/
+package main
 
 import (
 	"fmt"
