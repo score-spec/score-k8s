@@ -6,7 +6,7 @@ before:
 builds:
   - id: score-k8s
     binary: score-k8s
-    main: ./
+    main: ./cmd/score-k8s
     ldflags:
       - -X github.com/score-spec/score-k8s/internal/version.Version={{ .Version }}
     env:

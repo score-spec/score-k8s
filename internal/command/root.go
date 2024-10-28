@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package command
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -58,9 +56,6 @@ func init() {
 	rootCmd.PersistentFlags().CountP("verbose", "v", "Increase log verbosity and detail by specifying this flag one or more times")
 }
 
-func main() {
-	if err := rootCmd.Execute(); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "Error: "+err.Error())
-		os.Exit(1)
-	}
+func Execute() error {
+	return rootCmd.Execute()
 }

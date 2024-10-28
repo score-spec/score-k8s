@@ -1,4 +1,4 @@
-<img src="images/banner.png"/>
+![banner image](images/banner.png)
 
 # score-k8s
 
@@ -6,7 +6,7 @@
 
 This implementation supports most aspects of the Score specification and provides a powerful resource provisioning system for supplying and customising the dynamic configuration of attached services such as databases, queues, storage, and other network or storage APIs.
 
-![workflow diagram](workflow.drawio.png)
+![workflow diagram](images/workflow.drawio.png)
 
 1. The user runs `score-k8s init` in their project to initialise the empty state and default provisioners
 
@@ -164,7 +164,7 @@ $ wget https://github.com/score-spec/score-k8s/releases/download/<x.y.z>/score-k
 Or, install the Go module directly (Go > 1.23):
 
 ```
-$ go install -v github.com/score-spec/score-k8s@latest
+$ go install -v github.com/score-spec/score-k8s/cmd/score-k8s@latest
 ```
 
 Alternative installation guides and implementations can be found in the [Score docs](https://docs.score.dev/docs/score-implementation/score-k8s/#installation).
