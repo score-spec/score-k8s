@@ -78,7 +78,7 @@ Flags:
   -f, --file string                The score file to initialize (default "score.yaml")
   -h, --help                       help for init
       --no-sample                  Disable generation of the sample score file
-      --provisioners stringArray   A provisioners file to install. May be specified multiple times. Supports http://host/file, https://host/file, git-ssh://git@host/repo.git/file, and  git-https://host/repo.git/file formats.
+      --provisioners stringArray   A provisioners file to install. May be specified multiple times. Supports http://host/file, https://host/file, git-ssh://git@host/repo.git/file, git-https://host/repo.git/file and oci://[registry/][namespace/]repository[:tag|@digest][#file] formats.
 ```
 
 ### Generate
