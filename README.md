@@ -1,4 +1,4 @@
-[![release](https://github.com/score-spec/score-k8s/actions/workflows/release.yaml/badge.svg)](https://github.com/score-spec/score-k8s/actions/workflows/release.yaml)
+[![ci](https://github.com/score-spec/score-k8s/actions/workflows/ci.yaml/badge.svg)](https://github.com/score-spec/score-k8s/actions/workflows/ci.yaml) [![release](https://github.com/score-spec/score-k8s/actions/workflows/release.yaml/badge.svg)](https://github.com/score-spec/score-k8s/actions/workflows/release.yaml)
 
 ![banner image](images/banner.png)
 
