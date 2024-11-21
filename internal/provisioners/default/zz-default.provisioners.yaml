@@ -928,7 +928,7 @@
     bucket: {{ dig "bucket" (printf "bucket-%s" .Guid) .State | quote }}
   shared: |
     {{ .Init.sk }}:
-      instanceServiceName: {{ dig .Init.sk "instanceServiceName" (randAlpha 7 | printf "minio-%s") .Shared | quote }}
+      instanceServiceName: {{ dig .Init.sk "instanceServiceName" (randAlpha 7 | lower | printf "minio-%s") .Shared | quote }}
       instanceUsername: {{ dig .Init.sk "instanceUsername" (randAlpha 7 | printf "user-%s") .Shared | quote }}
       instancePassword: {{ dig .Init.sk "instancePassword" (randAlphaNum 16) .Shared | quote }}
       instanceAccessKeyId: {{ dig .Init.sk "instanceAccessKeyId" (randAlphaNum 20) .Shared | quote }}
@@ -969,7 +969,7 @@
             containers:
             - name: minio
               image:  quay.io/minio/minio
-              command: ["server", "/data", "--console-address", ":9001"]
+              args: ["server", "/data", "--console-address", ":9001"]
               ports:
               - name: service
                 containerPort: 9000
@@ -991,11 +991,38 @@
                 capabilities:
                   drop:
                     - ALL
+              volumeMounts:
+              - name: data
+                mountPath: /data
             securityContext:
               runAsNonRoot: true
+              runAsUser: 1000
+              runAsGroup: 1000
               fsGroup: 1000
               seccompProfile:
                 type: RuntimeDefault
+        volumeClaimTemplates:
+        - metadata:
+            name: data
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ $service | quote }}
+              app.kubernetes.io/instance: {{ $service | quote }}
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 1Gi
+    - apiVersion: v1
+      kind: Secret
+      metadata:
+        name: {{ $service }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ $service }}
+          app.kubernetes.io/instance: {{ $service }}
+      data:
+        password: {{ dig .Init.sk "instancePassword" "" .Shared | b64enc }}
     - apiVersion: v1
       kind: Service
       metadata:
@@ -1009,7 +1036,9 @@
           app.kubernetes.io/instance: {{ $service }}
         type: ClusterIP
         ports:
-        - port: 9000
+        - name: service
+          port: 9000
           targetPort: 9000
-        - port: 9001
+        - name: console
+          port: 9001
           targetPort: 9001
