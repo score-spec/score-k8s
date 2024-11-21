@@ -196,6 +196,14 @@ manifests. All resources and links between Workloads will be resolved and provis
 					if p, ok := internal.FindFirstUnresolvedSecretRef("", manifest); ok {
 						return errors.Errorf("unresolved secret ref in manifest: %s", p)
 					}
+					mSig := buildManifestSignature(manifest)
+					outputManifests = slices.DeleteFunc(outputManifests, func(other map[string]interface{}) bool {
+						if buildManifestSignature(other) == mSig {
+							slog.Info(fmt.Sprintf("Overriding duplicate resource manifest %s", mSig))
+							return true
+						}
+						return false
+					})
 					outputManifests = append(outputManifests, manifest)
 				}
 				slog.Info(fmt.Sprintf("Wrote %d resource manifests to manifests buffer for resource '%s'", len(res.Extras.Manifests), id))
@@ -217,6 +225,14 @@ manifests. All resources and links between Workloads will be resolved and provis
 				if p, ok := internal.FindFirstUnresolvedSecretRef("", intermediate); ok {
 					return errors.Errorf("unresolved secret ref in manifest: %s", p)
 				}
+				mSig := buildManifestSignature(intermediate)
+				outputManifests = slices.DeleteFunc(outputManifests, func(other map[string]interface{}) bool {
+					if buildManifestSignature(other) == mSig {
+						slog.Info(fmt.Sprintf("Overriding duplicate resource manifest %s", mSig))
+						return true
+					}
+					return false
+				})
 				outputManifests = append(outputManifests, intermediate)
 			}
 			slog.Info(fmt.Sprintf("Wrote %d manifests to manifests buffer for workload '%s'", len(manifests), workloadName))
@@ -333,6 +349,17 @@ func parseAndApplyManifestPatches(entry string, flagName string, manifests []map
 		outManifests[i] = manifest
 	}
 	return outManifests, nil
+}
+
+// buildManifestSignature builds a unique manifest signature for each manifest coming out of a resource. This is used
+// to deduplicate resource manifests when they share state.
+func buildManifestSignature(n map[string]interface{}) string {
+	apiVersion, _ := n["apiVersion"].(string)
+	kind, _ := n["kind"].(string)
+	metadata, _ := n["metadata"].(map[string]interface{})
+	namespace, _ := metadata["namespace"].(string)
+	name, _ := metadata["name"].(string)
+	return fmt.Sprintf("%s/%s/%s/%s", apiVersion, kind, namespace, name)
 }
 
 func init() {
