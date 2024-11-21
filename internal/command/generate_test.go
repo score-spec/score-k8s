@@ -18,6 +18,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -235,4 +236,40 @@ containers:
 	})
 	assert.EqualError(t, err, "cannot use --override-property, --overrides-file, or --image when 0 or more than 1 score files are provided")
 	assert.Equal(t, "", stdout)
+}
+
+func TestDeduplicateResourceManifests(t *testing.T) {
+	td := changeToTempDir(t)
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example-a
+containers:
+  hello:
+    image: foo
+resources:
+  d1:
+    type: dummy
+  d2:
+    type: dummy
+`), 0644))
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+	assert.NoError(t, os.WriteFile(filepath.Join(td, ".score-k8s", "00.provisioners.yaml"), []byte(`
+- uri: template://dummy
+  type: dummy
+  manifests: |
+    - apiVersion: v1
+      kind: Secret
+      metadata:
+        name: my-secret
+      data:
+        fruit: {{ b64enc "banana" }}
+`), 0644))
+	_, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"generate", "score.yaml"})
+	t.Log(string(stderr))
+	require.NoError(t, err)
+	rawManifests, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
+	require.NoError(t, err)
+	assert.Equal(t, strings.Count(string(rawManifests), "kind: Secret"), 1, "failed to find in", string(rawManifests))
 }
