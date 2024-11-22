@@ -1063,6 +1063,7 @@
               - /bin/bash
               - -c
               - |
+                set -eu
                 mc alias set myminio http://{{ $service }}:9000 {{ $shared.instanceUsername | quote }} $MINIO_ROOT_PASSWORD
                 mc admin user svcacct info myminio {{ $shared.instanceAccessKeyId | quote }} || mc admin user svcacct add myminio {{ $shared.instanceUsername | quote }} --access-key {{ $shared.instanceAccessKeyId | quote }} --secret-key $MINIO_SECRET_KEY
                 mc mb -p myminio/{{ .State.bucket }}
