@@ -915,3 +915,166 @@
         ports:
         - port: 1433
           targetPort: 1433
+
+# This resource provides an in-cluster minio based S3 bucket with AWS-style credentials.
+# This provides some common and well known outputs that can be used with any generic AWS s3 client.
+# The outputs of the provisioner are a stateful set, a service, a secret, and a job per bucket.
+- uri: template://default-provisioners/s3
+  type: s3
+  # The init template contains some initial seed data that can be used t needed.
+  init: |
+    sk: default-provisioners-minio-instance
+  state: |
+    bucket: {{ dig "bucket" (printf "bucket-%s" .Guid) .State | quote }}
+  shared: |
+    {{ .Init.sk }}:
+      instanceServiceName: {{ dig .Init.sk "instanceServiceName" (randAlpha 7 | lower | printf "minio-%s") .Shared | quote }}
+      instanceUsername: {{ dig .Init.sk "instanceUsername" (randAlpha 7 | printf "user-%s") .Shared | quote }}
+      instancePassword: {{ dig .Init.sk "instancePassword" (randAlphaNum 16) .Shared | quote }}
+      instanceAccessKeyId: {{ dig .Init.sk "instanceAccessKeyId" (randAlphaNum 20) .Shared | quote }}
+      instanceSecretKey: {{ dig .Init.sk "instanceSecretKey" (randAlphaNum 40) .Shared | quote }}
+  outputs: |
+    {{ $shared := dig .Init.sk (dict) .Shared }}
+    {{ $service := $shared.instanceServiceName }}
+    bucket: {{ .State.bucket }}
+    access_key_id: {{ $shared.instanceAccessKeyId | quote }}
+    secret_key: {{ encodeSecretRef $service "secret_key" }}
+    endpoint: http://{{ $service }}:9000
+    region: "us-east-1"
+    # for compatibility with Humanitec's existing s3 resource
+    aws_access_key_id: {{ $shared.instanceAccessKeyId | quote }}
+    aws_secret_key: {{ encodeSecretRef $service "secret_key" }}
+  manifests: |
+    {{ $shared := dig .Init.sk (dict) .Shared }}
+    {{ $service := $shared.instanceServiceName }}
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: {{ $service | quote }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ $service | quote }}
+          app.kubernetes.io/instance: {{ $service | quote }}
+      spec:
+        replicas: 1
+        serviceName: {{ $service | quote }}
+        selector:
+          matchLabels:
+            app.kubernetes.io/instance: {{ $service | quote }}
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ $service | quote }}
+              app.kubernetes.io/instance: {{ $service | quote }}
+          spec:
+            automountServiceAccountToken: false
+            containers:
+            - name: minio
+              image:  quay.io/minio/minio
+              args: ["server", "/data", "--console-address", ":9001"]
+              ports:
+              - name: service
+                containerPort: 9000
+              - name: console
+                containerPort: 9001
+              env:
+              - name: MINIO_ROOT_USER
+                value: {{ $shared.instanceUsername | quote }}
+              - name: MINIO_ROOT_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ $service | quote }}
+                    key: password
+              securityContext:
+                runAsUser: 1000
+                runAsGroup: 1000
+                allowPrivilegeEscalation: false
+                privileged: false
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+              - name: data
+                mountPath: /data
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1000
+              runAsGroup: 1000
+              fsGroup: 1000
+              seccompProfile:
+                type: RuntimeDefault
+        volumeClaimTemplates:
+        - metadata:
+            name: data
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ $service | quote }}
+              app.kubernetes.io/instance: {{ $service | quote }}
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 1Gi
+    - apiVersion: v1
+      kind: Secret
+      metadata:
+        name: {{ $service }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ $service }}
+          app.kubernetes.io/instance: {{ $service }}
+      data:
+        password: {{ $shared.instancePassword | b64enc }}
+        secret_key: {{ $shared.instanceSecretKey | b64enc }}
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{ $service }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ $service }}
+          app.kubernetes.io/instance: {{ $service }}
+      spec:
+        selector:
+          app.kubernetes.io/instance: {{ $service }}
+        type: ClusterIP
+        ports:
+        - name: service
+          port: 9000
+          targetPort: 9000
+        - name: console
+          port: 9001
+          targetPort: 9001
+    - apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: {{ printf "%s-bucket-%s" $service .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+      spec:
+        template:
+          spec:
+            restartPolicy: OnFailure
+            containers:
+            - name: main
+              image: quay.io/minio/minio
+              command:
+              - /bin/bash
+              - -c
+              - |
+                set -eu
+                mc alias set myminio http://{{ $service }}:9000 {{ $shared.instanceUsername | quote }} $MINIO_ROOT_PASSWORD
+                mc admin user svcacct info myminio {{ $shared.instanceAccessKeyId | quote }} || mc admin user svcacct add myminio {{ $shared.instanceUsername | quote }} --access-key {{ $shared.instanceAccessKeyId | quote }} --secret-key $MINIO_SECRET_KEY
+                mc mb -p myminio/{{ .State.bucket }}
+              env:
+              - name: MINIO_ROOT_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ $service | quote }}
+                    key: password
+              - name: MINIO_SECRET_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ $service | quote }}
+                    key: secret_key
