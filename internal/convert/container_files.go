@@ -41,7 +41,7 @@ func convertContainerFile(
 
 	var mountMode *int32
 	if fileElem.Mode != nil {
-		df, err := strconv.ParseInt(*fileElem.Mode, 10, 32)
+		df, err := strconv.ParseInt(*fileElem.Mode, 8, 32)
 		if err != nil {
 			return mount, nil, nil, errors.Wrapf(err, "mode: failed to parse '%s'", *fileElem.Mode)
 		}
