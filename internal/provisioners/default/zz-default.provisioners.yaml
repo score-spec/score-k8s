@@ -918,11 +918,11 @@
 
 # This resource provides an in-cluster minio based S3 bucket with AWS-style credentials.
 # This provides some common and well known outputs that can be used with any generic AWS s3 client.
+# The outputs of the provisioner are a stateful set, a service, a secret, and a job per bucket.
 - uri: template://default-provisioners/s3
   type: s3
   # The init template contains some initial seed data that can be used t needed.
   init: |
-    randomBucket: bucket-{{ randAlpha 8 | lower }}-{{ .Id | lower | trunc 47 }}
     sk: default-provisioners-minio-instance
   state: |
     bucket: {{ dig "bucket" (printf "bucket-%s" .Guid) .State | quote }}
@@ -934,16 +934,19 @@
       instanceAccessKeyId: {{ dig .Init.sk "instanceAccessKeyId" (randAlphaNum 20) .Shared | quote }}
       instanceSecretKey: {{ dig .Init.sk "instanceSecretKey" (randAlphaNum 40) .Shared | quote }}
   outputs: |
+    {{ $shared := dig .Init.sk (dict) .Shared }}
+    {{ $service := $shared.instanceServiceName }}
     bucket: {{ .State.bucket }}
-    access_key_id: {{ dig .Init.sk "instanceAccessKeyId" "" .Shared | quote }}
-    secret_key: {{ dig .Init.sk "instanceSecretKey" "" .Shared | quote }}
-    endpoint: http://{{ dig .Init.sk "instanceServiceName" "" .Shared }}:9000
+    access_key_id: {{ $shared.instanceAccessKeyId | quote }}
+    secret_key: {{ encodeSecretRef $service "secret_key" }}
+    endpoint: http://{{ $service }}:9000
+    region: "us-east-1"
     # for compatibility with Humanitec's existing s3 resource
-    region: ""
-    aws_access_key_id: {{ dig .Init.sk "instanceAccessKeyId" "" .Shared | quote }}
-    aws_secret_key: {{ dig .Init.sk "instanceSecretKey" "" .Shared | quote }}
+    aws_access_key_id: {{ $shared.instanceAccessKeyId | quote }}
+    aws_secret_key: {{ encodeSecretRef $service "secret_key" }}
   manifests: |
-    {{ $service := dig .Init.sk "instanceServiceName" "" .Shared }}
+    {{ $shared := dig .Init.sk (dict) .Shared }}
+    {{ $service := $shared.instanceServiceName }}
     - apiVersion: apps/v1
       kind: StatefulSet
       metadata:
@@ -977,7 +980,7 @@
                 containerPort: 9001
               env:
               - name: MINIO_ROOT_USER
-                value: {{ dig .Init.sk "instanceUsername" "" .Shared | quote }}
+                value: {{ $shared.instanceUsername | quote }}
               - name: MINIO_ROOT_PASSWORD
                 valueFrom:
                   secretKeyRef:
@@ -1022,7 +1025,8 @@
           app.kubernetes.io/name: {{ $service }}
           app.kubernetes.io/instance: {{ $service }}
       data:
-        password: {{ dig .Init.sk "instancePassword" "" .Shared | b64enc }}
+        password: {{ $shared.instancePassword | b64enc }}
+        secret_key: {{ $shared.instanceSecretKey | b64enc }}
     - apiVersion: v1
       kind: Service
       metadata:
@@ -1042,3 +1046,34 @@
         - name: console
           port: 9001
           targetPort: 9001
+    - apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: {{ printf "%s-bucket-%s" $service .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+      spec:
+        template:
+          spec:
+            restartPolicy: OnFailure
+            containers:
+            - name: main
+              image: quay.io/minio/minio
+              command:
+              - /bin/bash
+              - -c
+              - |
+                mc alias set myminio http://{{ $service }}:9000 {{ $shared.instanceUsername | quote }} $MINIO_ROOT_PASSWORD
+                mc admin user svcacct info myminio {{ $shared.instanceAccessKeyId | quote }} || mc admin user svcacct add myminio {{ $shared.instanceUsername | quote }} --access-key {{ $shared.instanceAccessKeyId | quote }} --secret-key $MINIO_SECRET_KEY
+                mc mb -p myminio/{{ .State.bucket }}
+              env:
+              - name: MINIO_ROOT_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ $service | quote }}
+                    key: password
+              - name: MINIO_SECRET_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ $service | quote }}
+                    key: secret_key

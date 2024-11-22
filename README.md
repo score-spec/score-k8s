@@ -48,6 +48,7 @@ For details of how the standard "template" provisioner works, see the `template:
 | mongodb       | default | (none)                 | `host`, `port`, `username`, `password`, `name`, `connection`    |
 | ampq          | default | (none)                 | `host`, `port`, `username`, `password`, `vhost`                 |
 | mssql         | default | (none)                 | `server`, `port`, `database`, `password`                        |
+| s3            | default | (none)                 | `endpoint`, `region`, `bucket`, `access_key_id`, `secret_key`   |
 
 Users are encouraged to write their own custom provisioners to support new resource types or to modify the implementations above.
 
