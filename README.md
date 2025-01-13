@@ -253,3 +253,13 @@ You can find our documentation at [docs.score.dev](https://docs.score.dev/docs).
 ### Roadmap
 
 See [Roadmap](https://github.com/score-spec/spec/blob/main/roadmap.md). You can [submit an idea](https://github.com/score-spec/spec/blob/main/roadmap.md#get-involved) anytime.
+
+### License
+
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fscore-spec%2Fscore-k8s.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fscore-spec%2Fscore-k8s?ref=badge_shield&issueType=license)
+
+### Code of conduct
+
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
