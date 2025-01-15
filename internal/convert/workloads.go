@@ -15,7 +15,11 @@
 package convert
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"slices"
 	"strings"
 
@@ -26,6 +30,7 @@ import (
 	coreV1 "k8s.io/api/core/v1"
 	machineryMeta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/score-spec/score-k8s/internal"
 	"github.com/score-spec/score-k8s/internal/project"
@@ -49,14 +54,6 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 
 	spec := state.Workloads[workloadName].Spec
 	manifests := make([]machineryMeta.Object, 0, 1)
-
-	kind := WorkloadKindDeployment
-	if d, ok := internal.FindAnnotation(spec.Metadata, internal.WorkloadKindAnnotation); ok {
-		kind = d
-		if kind != WorkloadKindDeployment && kind != WorkloadKindStatefulSet {
-			return nil, errors.Wrapf(err, "metadata: annotations: %s: unsupported workload kind", internal.WorkloadKindAnnotation)
-		}
-	}
 
 	// containers and volumes here are fun..
 	// we have to collect them all based on the parent paths they get mounted in and turn these into projected volumes
@@ -116,9 +113,6 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			} else {
 				containerVolumeMounts = append(containerVolumeMounts, mount)
 				if claim != nil {
-					if kind != WorkloadKindStatefulSet {
-						return nil, errors.Wrapf(err, "containers.%s.volumes.%d: volume claims can only be set on stateful sets", containerName, i)
-					}
 					volumeClaimTemplates = append(volumeClaimTemplates, *claim)
 				} else if vol != nil {
 					containerVolumes = append(containerVolumes, *vol)
@@ -158,15 +152,8 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		containers = append(containers, c)
 	}
 
-	// We want to apply the annotations from the workload onto the pod.
-	// See the doc of buildPodAnnotations for what gets included here.
-	podAnnotations := buildPodAnnotations(spec.Metadata)
-	topLevelAnnotations := map[string]string{
-		internal.AnnotationPrefix + "workload-name": workloadName,
-	}
-
+	portList := make([]coreV1.ServicePort, 0)
 	if spec.Service != nil && len(spec.Service.Ports) > 0 {
-		portList := make([]coreV1.ServicePort, 0, len(spec.Service.Ports))
 		for portName, port := range spec.Service.Ports {
 			var proto = coreV1.ProtocolTCP
 			if port.Protocol != nil && *port.Protocol != "" {
@@ -183,20 +170,80 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 				Protocol:   proto,
 			})
 		}
-		manifests = append(manifests, &coreV1.Service{
-			TypeMeta: machineryMeta.TypeMeta{Kind: "Service", APIVersion: "v1"},
+	}
+
+	converterInputs := ConverterInputs{
+		WorkloadName:        workloadName,
+		WorkloadAnnotations: internal.GetAnnotations(spec.Metadata),
+		PodTemplate: coreV1.PodTemplateSpec{
 			ObjectMeta: machineryMeta.ObjectMeta{
-				Name:        WorkloadServiceName(workloadName, spec.Metadata),
-				Annotations: topLevelAnnotations,
-				Labels:      commonLabels,
+				Labels: commonLabels,
+				// We want to apply the annotations from the workload onto the pod.
+				// See the doc of buildPodAnnotations for what gets included here.
+				Annotations: buildPodAnnotations(spec.Metadata),
 			},
-			Spec: coreV1.ServiceSpec{
-				Selector: map[string]string{
-					SelectorLabelInstance: commonLabels[SelectorLabelInstance],
-				},
-				Ports: portList,
-			},
-		})
+			Spec: coreV1.PodSpec{Containers: containers, Volumes: volumes},
+		},
+		VolumeClaimTemplates: volumeClaimTemplates,
+		ServicePorts:         portList,
+	}
+
+	// This might seem silly, but really we're doing a round trip of the json conversion to ensure we don't cheat in our internal version
+	rawConverterInputs, err := json.Marshal(converterInputs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize converter inputs")
+	}
+	var rawManifests []byte
+	if cb := state.Workloads[workloadName].Extras.ConverterBinary; cb != "" {
+		parts := strings.Split(cb, ",")
+		c := exec.Command(parts[0], parts...)
+		c.Env = os.Environ()
+		c.Stdin = bytes.NewReader(rawConverterInputs)
+		c.Stderr = os.Stderr
+		buf := new(bytes.Buffer)
+		c.Stdout = buf
+		if err := c.Run(); err != nil {
+			return nil, fmt.Errorf("failed to run converter binary '%s' on inputs: %w", cb, err)
+		}
+		rawManifests = buf.Bytes()
+	} else {
+		rawManifests, err = ConvertRawInputsToRawManifests(rawConverterInputs)
+		if err != nil {
+			return nil, err
+		}
+		var convertedManifests []machineryMeta.Object
+		if err := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(rawManifests), 100).Decode(&convertedManifests); err != nil {
+			return nil, fmt.Errorf("failed to decode convert outputs into manifests: %w", err)
+		}
+		manifests = append(manifests, convertedManifests...)
+	}
+	return manifests, nil
+}
+
+func ConvertRawInputsToRawManifests(rawInputs []byte) ([]byte, error) {
+	var inputs ConverterInputs
+	if err := json.Unmarshal(rawInputs, &inputs); err != nil {
+		return nil, fmt.Errorf("failed to decode: %w", err)
+	} else if manifests, err := ConvertInputsToManifest(inputs); err != nil {
+		return nil, fmt.Errorf("failed to convert: %w", err)
+	} else {
+		return json.Marshal(manifests)
+	}
+}
+
+func ConvertInputsToManifest(inputs ConverterInputs) ([]machineryMeta.Object, error) {
+	manifests := make([]machineryMeta.Object, 0)
+
+	kind := WorkloadKindDeployment
+	if d, ok := inputs.WorkloadAnnotations[internal.WorkloadKindAnnotation].(string); ok && d != "" {
+		kind = d
+		if kind != WorkloadKindDeployment && kind != WorkloadKindStatefulSet {
+			return nil, fmt.Errorf("metadata: annotations: %s: unsupported workload kind", internal.WorkloadKindAnnotation)
+		}
+	}
+
+	topLevelAnnotations := map[string]string{
+		internal.AnnotationPrefix + "workload-name": inputs.WorkloadName,
 	}
 
 	switch kind {
@@ -204,42 +251,33 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		manifests = append(manifests, &v1.Deployment{
 			TypeMeta: machineryMeta.TypeMeta{Kind: WorkloadKindDeployment, APIVersion: "apps/v1"},
 			ObjectMeta: machineryMeta.ObjectMeta{
-				Name:        workloadName,
+				Name:        inputs.WorkloadName,
 				Annotations: topLevelAnnotations,
-				Labels:      commonLabels,
+				Labels:      inputs.PodTemplate.Labels,
 			},
 			Spec: v1.DeploymentSpec{
 				Selector: &machineryMeta.LabelSelector{
 					MatchLabels: map[string]string{
-						SelectorLabelInstance: commonLabels[SelectorLabelInstance],
+						SelectorLabelInstance: inputs.PodTemplate.Labels[SelectorLabelInstance],
 					},
 				},
-				Template: coreV1.PodTemplateSpec{
-					ObjectMeta: machineryMeta.ObjectMeta{
-						Labels:      commonLabels,
-						Annotations: podAnnotations,
-					},
-					Spec: coreV1.PodSpec{
-						Containers: containers,
-						Volumes:    volumes,
-					},
-				},
+				Template: inputs.PodTemplate,
 			},
 		})
 	case WorkloadKindStatefulSet:
 
 		// need to allocate a headless service here
-		headlessServiceName := fmt.Sprintf("%s-headless-svc", workloadName)
+		headlessServiceName := fmt.Sprintf("%s-headless-svc", inputs.WorkloadName)
 		manifests = append(manifests, &coreV1.Service{
 			TypeMeta: machineryMeta.TypeMeta{Kind: "Service", APIVersion: "v1"},
 			ObjectMeta: machineryMeta.ObjectMeta{
 				Name:        headlessServiceName,
 				Annotations: topLevelAnnotations,
-				Labels:      commonLabels,
+				Labels:      inputs.PodTemplate.Labels,
 			},
 			Spec: coreV1.ServiceSpec{
 				Selector: map[string]string{
-					SelectorLabelInstance: commonLabels[SelectorLabelInstance],
+					SelectorLabelInstance: inputs.PodTemplate.Labels[SelectorLabelInstance],
 				},
 				ClusterIP: "None",
 				Ports:     []coreV1.ServicePort{{Name: "default", Port: 99, TargetPort: intstr.FromInt32(99)}},
@@ -249,29 +287,20 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		manifests = append(manifests, &v1.StatefulSet{
 			TypeMeta: machineryMeta.TypeMeta{Kind: WorkloadKindStatefulSet, APIVersion: "apps/v1"},
 			ObjectMeta: machineryMeta.ObjectMeta{
-				Name:        workloadName,
+				Name:        inputs.WorkloadName,
 				Annotations: topLevelAnnotations,
-				Labels:      commonLabels,
+				Labels:      inputs.PodTemplate.Labels,
 			},
 			Spec: v1.StatefulSetSpec{
 				Selector: &machineryMeta.LabelSelector{
 					MatchLabels: map[string]string{
-						SelectorLabelInstance: commonLabels[SelectorLabelInstance],
+						SelectorLabelInstance: inputs.PodTemplate.Labels[SelectorLabelInstance],
 					},
 				},
 				ServiceName: headlessServiceName,
-				Template: coreV1.PodTemplateSpec{
-					ObjectMeta: machineryMeta.ObjectMeta{
-						Labels:      commonLabels,
-						Annotations: podAnnotations,
-					},
-					Spec: coreV1.PodSpec{
-						Containers: containers,
-						Volumes:    volumes,
-					},
-				},
+				Template:    inputs.PodTemplate,
 				// So the puzzle here is how to get this from our volumes...
-				VolumeClaimTemplates: volumeClaimTemplates,
+				VolumeClaimTemplates: inputs.VolumeClaimTemplates,
 			},
 		})
 	}
@@ -316,4 +345,12 @@ func buildPodAnnotations(metadata map[string]interface{}) map[string]string {
 	}
 	out[internal.AnnotationPrefix+"workload-name"] = metadata["name"].(string)
 	return out
+}
+
+type ConverterInputs struct {
+	WorkloadName         string                         `json:"workload_name"`
+	PodTemplate          coreV1.PodTemplateSpec         `json:"pod_template"`
+	VolumeClaimTemplates []coreV1.PersistentVolumeClaim `json:"volume_claim_templates"`
+	ServicePorts         []coreV1.ServicePort           `json:"service_ports"`
+	WorkloadAnnotations  map[string]interface{}         `json:"workload_annotations"`
 }

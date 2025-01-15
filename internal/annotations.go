@@ -24,9 +24,13 @@ const (
 	WorkloadServiceNameAnnotation = AnnotationPrefix + "service-name"
 )
 
+func GetAnnotations(metadata map[string]interface{}) map[string]interface{} {
+	a, _ := metadata["annotations"].(map[string]interface{})
+	return a
+}
+
 func ListAnnotations(metadata map[string]interface{}) []string {
-	a, ok := metadata["annotations"].(map[string]interface{})
-	if ok {
+	if a := GetAnnotations(metadata); a != nil {
 		out := make([]string, 0, len(a))
 		for s, _ := range a {
 			out = append(out, s)
@@ -38,8 +42,7 @@ func ListAnnotations(metadata map[string]interface{}) []string {
 }
 
 func FindAnnotation(metadata map[string]interface{}, annotation string) (string, bool) {
-	a, ok := metadata["annotations"].(map[string]interface{})
-	if ok {
+	if a := GetAnnotations(metadata); a != nil {
 		if v, ok := a[annotation].(string); ok {
 			return v, true
 		}

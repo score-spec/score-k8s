@@ -31,7 +31,8 @@ const (
 )
 
 type WorkloadExtras struct {
-	InstanceSuffix string `yaml:"instance_suffix"`
+	InstanceSuffix  string `yaml:"instance_suffix"`
+	ConverterBinary string `yaml:"converter_binary,omitempty"`
 }
 
 type ResourceExtras struct {
