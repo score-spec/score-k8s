@@ -15,10 +15,12 @@
 package convert
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/pkg/errors"
 	"github.com/score-spec/score-go/framework"
@@ -52,6 +54,11 @@ func convertContainerFile(
 	var err error
 	if fileElem.Content != nil {
 		content = []byte(*fileElem.Content)
+	} else if fileElem.BinaryContent != nil {
+		content, err = base64.StdEncoding.DecodeString(*fileElem.BinaryContent)
+		if err != nil {
+			return mount, nil, nil, fmt.Errorf("binaryContent: failed to decode base64: %w", err)
+		}
 	} else if fileElem.Source != nil {
 		sourcePath := *fileElem.Source
 		if !filepath.IsAbs(sourcePath) && scoreSpecPath != nil {
@@ -65,61 +72,63 @@ func convertContainerFile(
 		return mount, nil, nil, errors.New("missing 'content' or 'source'")
 	}
 
-	if fileElem.NoExpand == nil || !*fileElem.NoExpand {
+	if (fileElem.NoExpand == nil || !*fileElem.NoExpand) && fileElem.BinaryContent == nil {
+		if !utf8.Valid(content) {
+			return mount, nil, nil, errors.New("source content contains non-utf8 bytes; set noExpand=true or use binaryContent")
+		}
 		stringContent, err := framework.SubstituteString(string(content), substitutionFunc)
 		if err != nil {
 			return mount, nil, nil, errors.Wrap(err, "failed to substitute in content")
 		}
+
+		parts, refs, err := internal.DecodeSecretReferences(stringContent)
+		if err != nil {
+			return mount, nil, nil, errors.Wrap(err, "content: failed to resolve secret")
+		}
+
+		if len(refs) > 0 {
+			// If the file content is made up of a reference to just a secret, we can allow that
+			if len(refs) == 1 && parts[0] == "" && parts[1] == "" {
+				return mount, nil, &coreV1.Volume{
+					Name: mount.Name,
+					VolumeSource: coreV1.VolumeSource{
+						Secret: &coreV1.SecretVolumeSource{
+							SecretName: refs[0].Name,
+							Items: []coreV1.KeyToPath{{
+								Key:  refs[0].Key,
+								Path: filepath.Base(fileElem.Target),
+								Mode: mountMode}},
+						},
+					},
+				}, nil
+			}
+			// Anything else is invalid
+			return mount, nil, nil, errors.New("content: contained a mix of secret references and raw content")
+		}
+
 		content = []byte(stringContent)
 	}
 
-	parts, refs, err := internal.DecodeSecretReferences(string(content))
-	if err != nil {
-		return mount, nil, nil, errors.Wrap(err, "content: failed to resolve secret")
-	}
-
-	// No secret refs means this is plain content that we can write directly as a config map.
-	if len(refs) == 0 {
-		configMapName := fmt.Sprintf("%sfile-%d", manifestPrefix, index)
-		return mount,
-			&coreV1.ConfigMap{
-				TypeMeta: machineryMeta.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
-				ObjectMeta: machineryMeta.ObjectMeta{
-					Name: configMapName,
-				},
-				BinaryData: map[string][]byte{"file": content},
-			}, &coreV1.Volume{
-				Name: mount.Name,
-				VolumeSource: coreV1.VolumeSource{
-					ConfigMap: &coreV1.ConfigMapVolumeSource{
-						Items: []coreV1.KeyToPath{{
-							Key:  "file",
-							Path: filepath.Base(fileElem.Target),
-							Mode: mountMode,
-						}},
-						LocalObjectReference: coreV1.LocalObjectReference{Name: configMapName},
-					},
-				},
+	configMapName := fmt.Sprintf("%sfile-%d", manifestPrefix, index)
+	return mount,
+		&coreV1.ConfigMap{
+			TypeMeta: machineryMeta.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
+			ObjectMeta: machineryMeta.ObjectMeta{
+				Name: configMapName,
 			},
-			nil
-	}
-
-	// If the file content is made up of a reference to just a secret, we can allow that
-	if len(refs) == 1 && parts[0] == "" && parts[1] == "" {
-		return mount, nil, &coreV1.Volume{
+			BinaryData: map[string][]byte{"file": content},
+		}, &coreV1.Volume{
 			Name: mount.Name,
 			VolumeSource: coreV1.VolumeSource{
-				Secret: &coreV1.SecretVolumeSource{
-					SecretName: refs[0].Name,
+				ConfigMap: &coreV1.ConfigMapVolumeSource{
 					Items: []coreV1.KeyToPath{{
-						Key:  refs[0].Key,
+						Key:  "file",
 						Path: filepath.Base(fileElem.Target),
-						Mode: mountMode}},
+						Mode: mountMode,
+					}},
+					LocalObjectReference: coreV1.LocalObjectReference{Name: configMapName},
 				},
 			},
-		}, nil
-	}
-
-	// Anything else is invalid
-	return mount, nil, nil, errors.New("content: contained a mix of secret references and raw content")
+		},
+		nil
 }

@@ -149,10 +149,14 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		volumes = append(volumes, containerVolumes...)
 
 		if container.LivenessProbe != nil {
-			c.LivenessProbe = &coreV1.Probe{ProbeHandler: buildProbe(container.LivenessProbe.HttpGet)}
+			if c.LivenessProbe, err = buildProbe(container.LivenessProbe); err != nil {
+				return nil, errors.Wrapf(err, "containers.%s.livenessProbe", containerName)
+			}
 		}
 		if container.ReadinessProbe != nil {
-			c.ReadinessProbe = &coreV1.Probe{ProbeHandler: buildProbe(container.ReadinessProbe.HttpGet)}
+			if c.ReadinessProbe, err = buildProbe(container.ReadinessProbe); err != nil {
+				return nil, errors.Wrapf(err, "containers.%s.readinessProbe", containerName)
+			}
 		}
 
 		containers = append(containers, c)
@@ -286,23 +290,32 @@ func WorkloadServiceName(workloadName string, specMetadata map[string]interface{
 	return workloadName
 }
 
-func buildProbe(input scoretypes.HttpProbe) coreV1.ProbeHandler {
-	ph := coreV1.ProbeHandler{
-		HTTPGet: &coreV1.HTTPGetAction{
-			Path:   input.Path,
-			Port:   intstr.FromInt32(int32(input.Port)),
-			Host:   internal.DerefOr(input.Host, ""),
-			Scheme: coreV1.URIScheme(internal.DerefOr(input.Scheme, "")),
-		},
-	}
-	if len(input.HttpHeaders) > 0 {
-		h := make([]coreV1.HTTPHeader, 0, len(input.HttpHeaders))
-		for _, header := range input.HttpHeaders {
-			h = append(h, coreV1.HTTPHeader{Name: header.Name, Value: header.Value})
+func buildProbe(probe *scoretypes.ContainerProbe) (*coreV1.Probe, error) {
+	if input := probe.HttpGet; input != nil {
+		ph := coreV1.ProbeHandler{
+			HTTPGet: &coreV1.HTTPGetAction{
+				Path:   input.Path,
+				Port:   intstr.FromInt32(int32(input.Port)),
+				Host:   internal.DerefOr(input.Host, ""),
+				Scheme: coreV1.URIScheme(internal.DerefOr(input.Scheme, "")),
+			},
 		}
-		ph.HTTPGet.HTTPHeaders = h
+		if len(input.HttpHeaders) > 0 {
+			h := make([]coreV1.HTTPHeader, 0, len(input.HttpHeaders))
+			for _, header := range input.HttpHeaders {
+				h = append(h, coreV1.HTTPHeader{Name: header.Name, Value: header.Value})
+			}
+			ph.HTTPGet.HTTPHeaders = h
+		}
+		return &coreV1.Probe{ProbeHandler: ph}, nil
+	} else if probe.Exec != nil {
+		return &coreV1.Probe{ProbeHandler: coreV1.ProbeHandler{
+			Exec: &coreV1.ExecAction{
+				Command: probe.Exec.Command,
+			},
+		}}, nil
 	}
-	return ph
+	return nil, fmt.Errorf("either httpGet or exec must be defined")
 }
 
 // buildPodAnnotations builds the annotations map for a pod by copying the workload annotations

@@ -16,6 +16,7 @@ package convert
 
 import (
 	"bytes"
+	"encoding/base64"
 	"testing"
 
 	"github.com/score-spec/score-go/framework"
@@ -54,16 +55,17 @@ func TestMassive(t *testing.T) {
 				Files: []scoretypes.ContainerFilesElem{
 					{
 						Target:  "/root.md",
-						Content: internal.Ref("my-content"),
+						Content: internal.Ref("my-content ${metadata.name}"),
+					},
+					{
+						Target:        "/binary",
+						BinaryContent: internal.Ref(base64.StdEncoding.EncodeToString([]byte("hello ${metadata.name} world"))),
 					},
 				},
-				LivenessProbe: &scoretypes.ContainerProbe{HttpGet: scoretypes.HttpProbe{
-					Scheme: internal.Ref(scoretypes.HttpProbeSchemeHTTP),
-					Host:   internal.Ref("hostname"),
-					Port:   3000,
-					Path:   "/something",
+				LivenessProbe: &scoretypes.ContainerProbe{Exec: &scoretypes.ExecProbe{
+					Command: []string{"echo", "true"},
 				}},
-				ReadinessProbe: &scoretypes.ContainerProbe{HttpGet: scoretypes.HttpProbe{
+				ReadinessProbe: &scoretypes.ContainerProbe{HttpGet: &scoretypes.HttpProbe{
 					Scheme: internal.Ref(scoretypes.HttpProbeSchemeHTTPS),
 					Host:   internal.Ref("127.0.0.1"),
 					Port:   3001,
@@ -131,15 +133,25 @@ func TestMassive(t *testing.T) {
 	for _, manifest := range manifests {
 		if assert.NoError(t, err) {
 			assert.NoError(t, internal.YamlSerializerInfo.Serializer.Encode(manifest.(runtime.Object), out))
+			out.WriteString("---\n")
 		}
 	}
 	assert.Equal(t, `apiVersion: v1
 binaryData:
-  file: bXktY29udGVudA==
+  file: bXktY29udGVudCBleGFtcGxl
 kind: ConfigMap
 metadata:
   creationTimestamp: null
   name: example-c1-file-0
+---
+apiVersion: v1
+binaryData:
+  file: aGVsbG8gJHttZXRhZGF0YS5uYW1lfSB3b3JsZA==
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: example-c1-file-1
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -161,6 +173,7 @@ spec:
     app.kubernetes.io/instance: example-abcdef
 status:
   loadBalancer: {}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -207,11 +220,10 @@ spec:
           value: xxx
         image: my-image
         livenessProbe:
-          httpGet:
-            host: hostname
-            path: /something
-            port: 3000
-            scheme: HTTP
+          exec:
+            command:
+            - echo
+            - "true"
         name: c1
         readinessProbe:
           httpGet:
@@ -227,19 +239,28 @@ spec:
         - mountPath: /mount/thing
           name: vol-0
         - mountPath: /
-          name: file-0
+          name: proj-vol-0
+          readOnly: true
       - image: other-image
         name: c2
         resources: {}
       volumes:
       - emptyDir: {}
         name: vol-0
-      - configMap:
-          items:
-          - key: file
-            path: root.md
-          name: example-c1-file-0
-        name: file-0
+      - name: proj-vol-0
+        projected:
+          sources:
+          - configMap:
+              items:
+              - key: file
+                path: root.md
+              name: example-c1-file-0
+          - configMap:
+              items:
+              - key: file
+                path: binary
+              name: example-c1-file-1
 status: {}
+---
 `, out.String())
 }
