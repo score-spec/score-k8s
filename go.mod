@@ -7,13 +7,13 @@ require (
 	github.com/imdario/mergo v1.0.1
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pkg/errors v0.9.1
-	github.com/score-spec/score-go v1.9.1
-	github.com/spf13/cobra v1.8.1
+	github.com/score-spec/score-go v1.9.2
+	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.32.1
-	k8s.io/apimachinery v0.32.1
+	k8s.io/api v0.32.2
+	k8s.io/apimachinery v0.32.2
 )
 
 require (
