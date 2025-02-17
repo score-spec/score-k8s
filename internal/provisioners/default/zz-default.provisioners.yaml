@@ -544,18 +544,15 @@
 - uri: template://default-provisioners/mongo
   type: mongodb
   init: |
-    randomDatabase: db-{{ randAlpha 8 }}
     randomUsername: user-{{ randAlpha 8 }}
     randomPassword: {{ randAlphaNum 16 | quote }}
   state: |
     service: mongo-{{ .SourceWorkload }}-{{ substr 0 8 .Guid | lower }}
-    database: {{ dig "database" .Init.randomDatabase .State | quote }}
     username: {{ dig "username" .Init.randomUsername .State | quote }}
     password: {{ dig "password" .Init.randomPassword .State | quote }}
   outputs: |
     host: {{ .State.service }}
     port: 27017
-    name: {{ .State.database }}
     connection: "mongodb://{{ .State.username }}:{{ .State.password }}@{{ .State.service }}:27017/"
     username: {{ .State.username }}
     password: {{ encodeSecretRef .State.service "MONGO_INITDB_ROOT_PASSWORD" }}
