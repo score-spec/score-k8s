@@ -42,6 +42,8 @@ jobs:
           push: false
           load: true
           tags: score-k8s:test
+          build-args: |
+            "VERSION=test"
       - name: Test docker image
         run: |
           docker run --rm score-k8s:test --version
