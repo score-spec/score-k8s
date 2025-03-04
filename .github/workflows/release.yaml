@@ -52,6 +52,8 @@ jobs:
           tags: |
             ghcr.io/score-spec/score-k8s:${{ github.ref_name }}
             ghcr.io/score-spec/score-k8s:latest
+          build-args: |
+            "VERSION=${{ github.ref_name }}"
       - name: Sign container image
         run: |
           cosign sign --yes ghcr.io/score-spec/score-k8s@${{ steps.build-push-container.outputs.digest }}
