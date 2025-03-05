@@ -189,6 +189,15 @@ Kubernetes is a complex environment to provide defaults for since there are so m
 
 The provisioner files are loaded in lexicographic order, the `zz` prefix helps to ensure that the defaults are loaded last and that any custom provisioners have precedence.
 
+### How can I write my own provisioner?
+
+Provisioners can be written as templates for score-k8s to evaluate or a command/script that will be called. Write a file following the conventions used in the example provisioners from [zz-default.provisioners.yaml](./internal/provisioners/default/zz-default.provisioners.yaml). Then add this to your project by running `score-k8s init --provisioners ./your-custom.provisioners.yaml`.
+
+Other resources can be found at:
+- https://github.com/score-spec/community-provisioners
+- https://score.dev/blog/writing-a-custom-score-compose-provisioner-for-apache-kafka/
+- `score-k8s init --help`
+
 ### Does score-k8s generate a Deployment or StatefulSet?
 
 `score-k8s` generates a Deployment by default or when the `k8s.score.dev/kind` workload metadata annotation is set to `Deployment`. If the annotation is set to `StatefulSet` it will generate a set and allow the use of claim templates as outputs from volume resources.
@@ -205,7 +214,7 @@ The provisioner files are loaded in lexicographic order, the `zz` prefix helps t
 
 Right now, no namespace is specified in the generated manifests so they will obey any `--namespace` passed to the `kubctl apply` command. All secret references are assumed to be in the same namespace as the workloads.
 
-### How do I test `score-k8s` with with `kind` (Kubernetes in docker)?
+### How do I test `score-k8s` with `kind` (Kubernetes in docker)?
 
 The main requirement is that the route resource provisioner assumes that the Gateway API implementation is available with a named Gateway "default".
 
