@@ -35,8 +35,11 @@
     nested:
       example: thing
     # Instead of returning secret outputs as plaintext. They can be embedded as reference to Kubernetes Secrets. When
-    # these are detected, they can be used in environment variables or file contents securely.
-    secret-reference: {{ encodeSecretRef "my-secret" "my-key" }}
+    # these are detected, they can be used in environment variables or file contents securely. The format is 
+    # 🔐💬<secret name>_<secret key name>💬🔐. For example, the next line refers to a secret created in the manifests.
+    secret-reference: 🔐💬secret-{{ .Guid }}_password💬🔐
+    # A template function also exists for generating these in the template provisioner.
+    secret-reference-alt: {{ encodeSecretRef (printf "secret-%s" .Guid) "password" }}
   # (Optional) The manifests template gets evaluated as a list of Kubernetes object manifests to be added to the output.
   manifests: |
     - apiVersion: v1
@@ -49,6 +52,20 @@
           k8s.score.dev/resource-guid: {{ .Guid }}
       data:
         key: {{ .Init.key }}
+    - apiVersion: v1
+      kind: Secret
+      metadata:
+        name: secret-{{ .Guid }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ .State.service }}
+          app.kubernetes.io/instance: {{ .State.service }}
+      data:
+        password: {{ b64enc "my-secret-password" }}
 
 # The 'cmd' scheme has a "host" + path component that indicates the path to the binary to execute. If the host starts
 # with "." it is interpreted as a relative path, if it starts with "~" it resolves to the home directory.
@@ -58,7 +75,7 @@
   id: specific
   # (Optional) additional args that the binary gets run with
   # If any of the args are '<mode>' it will be replaced with "provision"
-  args: ["-c", "echo '{\"resource_outputs\":{\"key\":\"value\"},\"manifests\":[]}'"]
+  args: ["-c", "echo '{\"resource_outputs\":{\"key\":\"value\",\"secret\":\"🔐💬mysecret_mykey💬🔐\"},\"manifests\":[]}'"]
 
 # The default provisioner for service resources, this expects a workload and port name and will return the hostname and
 # port required to contact it. This will validate that the workload and port exist, but won't enforce a dependency
