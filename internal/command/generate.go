@@ -24,7 +24,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/imdario/mergo"
+	"dario.cat/mergo"
 	"github.com/pkg/errors"
 	"github.com/score-spec/score-go/framework"
 	scoreloader "github.com/score-spec/score-go/loader"
