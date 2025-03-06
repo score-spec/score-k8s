@@ -15,7 +15,6 @@
 package internal
 
 import (
-	"encoding/base64"
 	"strconv"
 	"strings"
 
@@ -27,10 +26,11 @@ const (
 	magicSuffix = "💬🔐"
 )
 
+// EncodeSecretReference encodes a reference to a specific value within a secret.
+// An encoded value might look like: 🔐💬my.secret_inner-key"💬🔐.
+// Note the rules on valid characters here https://kubernetes.io/docs/concepts/configuration/secret/#restriction-names-data.
 func EncodeSecretReference(secret, key string) string {
-	return magicPrefix + base64.RawURLEncoding.EncodeToString([]byte(secret)) +
-		"." + base64.RawURLEncoding.EncodeToString([]byte(key)) +
-		magicSuffix
+	return magicPrefix + secret + "_" + key + magicSuffix
 }
 
 type SecretRef struct {
@@ -51,20 +51,13 @@ func DecodeSecretReferences(source string) ([]string, []SecretRef, error) {
 		if si >= 0 {
 			r := part[:si]
 			parts[1+i] = part[si+len(magicSuffix):]
-			bits := strings.Split(r, ".")
+			bits := strings.SplitN(r, "_", 2)
 			if len(bits) != 2 {
-				return nil, nil, errors.Errorf("invalid secret ref: more than 2 parts")
+				return nil, nil, errors.Errorf("invalid secret ref: doesn't contain _")
 			}
-			out := SecretRef{}
-			if r, err := base64.RawURLEncoding.DecodeString(bits[0]); err != nil {
-				return nil, nil, errors.Errorf("invalid secret ref: failed to decode parts.0")
-			} else {
-				out.Name = string(r)
-			}
-			if r, err := base64.RawURLEncoding.DecodeString(bits[1]); err != nil {
-				return nil, nil, errors.Errorf("invalid secret ref: failed to decode parts.1")
-			} else {
-				out.Key = string(r)
+			out := SecretRef{
+				Name: bits[0],
+				Key:  bits[1],
 			}
 			output = append(output, out)
 		}
