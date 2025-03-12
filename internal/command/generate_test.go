@@ -16,6 +16,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -272,4 +273,171 @@ resources:
 	rawManifests, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
 	require.NoError(t, err)
 	assert.Equal(t, strings.Count(string(rawManifests), "kind: Secret"), 1, "failed to find in", string(rawManifests))
+}
+
+func TestPatchTemplatesOps(t *testing.T) {
+	td := changeToTempDir(t)
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  hello:
+    image: foo
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "patch-1.tpl"), []byte(`
+{{ range $i, $_ := .Manifests }}
+- op: set
+  path: {{ $i }}.metadata.annotations.custom\.annotation/key
+  value: something
+  description: Add an annotation
+- op: set
+  path: {{ $i }}.metadata.namespace
+  value: production
+  description: Set the namespace explicitly
+{{ end }}
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "patch-2.tpl"), []byte(`
+- op: set
+  path: -1
+  value:
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: my-secret
+    data:
+      fruit: {{ b64enc "banana" }}
+  description: Add a secret
+- op: set
+  path: -1
+  value:
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: other-secret
+    data:
+      fruit: {{ b64enc "banana" }}
+  description: Add another secret
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "patch-3.tpl"), []byte(`
+{{ range $i, $m := .Manifests }}
+  {{ if eq (dig "metadata" "name" "" $m) "my-secret" }}
+- op: delete
+  path: {{ $i }}
+  description: Delete a manifest that was added
+  {{ end }}
+{{ end }}
+`), 0644))
+	_, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--patch-templates", "patch-1.tpl", "--patch-templates", "patch-2.tpl", "--patch-templates", "patch-3.tpl"})
+	t.Log(string(stderr))
+	require.NoError(t, err)
+	_, stderr, err = executeAndResetCommand(context.Background(), rootCmd, []string{"generate", "score.yaml"})
+	t.Log(string(stderr))
+	require.NoError(t, err)
+	rawManifests, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
+	require.NoError(t, err)
+	t.Log(string(rawManifests))
+	assert.NotContains(t, string(rawManifests), "my-secret")
+	assert.Contains(t, string(rawManifests), "other-secret")
+	assert.Equal(t, strings.Count(string(rawManifests), "custom.annotation/key: something"), 1)
+}
+
+func TestPatchTemplatesStatefulSet(t *testing.T) {
+	td := changeToTempDir(t)
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  hello:
+    image: foo
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "patch-1.tpl"), []byte(`
+{{ range $i, $m := .Manifests }}
+    {{ if and (eq $m.kind "Deployment") (ne (dig "metadata" "annotations" "k8s.score.dev/workload-name" "" $m) "") }}
+- op: set
+  path: {{ $i }}.kind
+  description: Convert deployment to statefulset
+  value: StatefulSet
+- op: set
+  path: {{ $i }}.spec.serviceName
+  description: Set the service name
+  value: {{ $m.metadata.name }}-headless-svc
+- op: delete
+  description: Remove any strategy field
+  path: {{ $i }}.spec.strategy
+- op: set
+  path: -1
+  value:
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: {{ $m.metadata.name }}-headless-svc
+    spec:
+      selector: {{ toRawJson $m.spec.selector.matchLabels }}
+      clusterIP: None
+      ports:
+      - port: 99
+        name: "99"
+  description: Create the headless service
+    {{ end }}
+{{ end }}
+`), 0644))
+	_, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--patch-templates", "patch-1.tpl"})
+	t.Log(string(stderr))
+	require.NoError(t, err)
+	_, stderr, err = executeAndResetCommand(context.Background(), rootCmd, []string{"generate", "score.yaml"})
+	t.Log(string(stderr))
+	require.NoError(t, err)
+	sd, ok, err := project.LoadStateDirectory(td)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	rawManifests, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
+	require.NoError(t, err)
+	t.Log(string(rawManifests))
+	assert.Equal(t, string(rawManifests), fmt.Sprintf(`---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+    annotations:
+        k8s.score.dev/workload-name: example
+    creationTimestamp: null
+    labels:
+        app.kubernetes.io/instance: example%[1]s
+        app.kubernetes.io/managed-by: score-k8s
+        app.kubernetes.io/name: example
+    name: example
+spec:
+    selector:
+        matchLabels:
+            app.kubernetes.io/instance: example%[1]s
+    serviceName: example-headless-svc
+    template:
+        metadata:
+            annotations:
+                k8s.score.dev/workload-name: example
+            creationTimestamp: null
+            labels:
+                app.kubernetes.io/instance: example%[1]s
+                app.kubernetes.io/managed-by: score-k8s
+                app.kubernetes.io/name: example
+        spec:
+            containers:
+                - image: foo
+                  name: hello
+                  resources: {}
+status: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: example-headless-svc
+spec:
+    clusterIP: None
+    ports:
+        - name: "99"
+          port: 99
+    selector:
+        app.kubernetes.io/instance: example%[1]s
+`, sd.State.Workloads["example"].Extras.InstanceSuffix))
 }

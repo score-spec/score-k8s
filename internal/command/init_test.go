@@ -159,3 +159,42 @@ func TestInitWithProvisioners(t *testing.T) {
 		}), fmt.Sprintf("Expected provisioner '%s' not found", expectedUri))
 	}
 }
+
+func TestInitWithPatchingFiles(t *testing.T) {
+	td := t.TempDir()
+	wd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(td))
+	defer func() {
+		require.NoError(t, os.Chdir(wd))
+	}()
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "patch-templates-1"), []byte(`[]`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "patch-templates-2"), []byte(`[]`), 0644))
+
+	t.Run("new", func(t *testing.T) {
+		_, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--patch-templates", filepath.Join(td, "patch-templates-1"), "--patch-templates", filepath.Join(td, "patch-templates-2")})
+		assert.NoError(t, err)
+		t.Log(stderr)
+		sd, ok, err := project.LoadStateDirectory(".")
+		assert.NoError(t, err)
+		if assert.True(t, ok) {
+			assert.Len(t, sd.State.Extras.PatchingTemplates, 2)
+		}
+	})
+
+	t.Run("update", func(t *testing.T) {
+		_, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--patch-templates", filepath.Join(td, "patch-templates-2")})
+		assert.NoError(t, err)
+		t.Log(stderr)
+		sd, ok, err := project.LoadStateDirectory(".")
+		assert.NoError(t, err)
+		if assert.True(t, ok) {
+			assert.Len(t, sd.State.Extras.PatchingTemplates, 1)
+		}
+	})
+
+	t.Run("bad patch", func(t *testing.T) {
+		assert.NoError(t, os.WriteFile(filepath.Join(td, "patch-templates-3"), []byte(`{{ what is this }}`), 0644))
+		_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--patch-templates", filepath.Join(td, "patch-templates-3")})
+		assert.Error(t, err, "failed to parse template: template: :1: function \"what\" not defined")
+	})
+}
