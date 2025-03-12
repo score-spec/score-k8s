@@ -27,15 +27,17 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/score-spec/score-k8s/internal/patching"
 	"github.com/score-spec/score-k8s/internal/project"
 	_default "github.com/score-spec/score-k8s/internal/provisioners/default"
 	"github.com/score-spec/score-k8s/internal/provisioners/loader"
 )
 
 const (
-	initCmdFileFlag         = "file"
-	initCmdFileNoSampleFlag = "no-sample"
-	initCmdProvisionerFlag  = "provisioners"
+	initCmdFileFlag          = "file"
+	initCmdFileNoSampleFlag  = "no-sample"
+	initCmdProvisionerFlag   = "provisioners"
+	initCmdPatchTemplateFlag = "patch-templates"
 )
 
 var initCmd = &cobra.Command{
@@ -51,6 +53,12 @@ potentially sensitive data and raw secrets, so this should not be checked into g
 Custom provisioners can be installed by uri using the --provisioners flag. The provisioners will be installed and take
 precedence in the order they are defined over the default provisioners. If init has already been called with provisioners
 the new provisioners will take precedence.
+
+To adjust the generated manifests, or perform post processing actions, you can use the --patch-templates flag to provide
+one or more template files by uri. Each template file is stored in the project and then evaluated as a 
+Golang text/template and should output a yaml/json encoded array of patches. Each patch is an object with required 'op' 
+(set or delete), 'patch' (a dot-separated json path), a 'value' if the 'op' == 'set', and an optional 'description' for 
+showing in the logs. The template has access to '.Manifests' and '.Workloads'.
 `,
 	Example: `
   # Initialise a new score-k8s project
@@ -60,21 +68,60 @@ the new provisioners will take precedence.
   score-k8s init --no-sample
 
   # Optionally loading in provisoners from a remote url
-  score-k8s init --provisioners https://raw.githubusercontent.com/user/repo/main/example.yaml`,
+  score-k8s init --provisioners https://raw.githubusercontent.com/user/repo/main/example.yaml
+
+  # Optionally adding a couple of patching templates
+  score-k8s init --patch-templates ./patching.tpl --patch-templates https://raw.githubusercontent.com/user/repo/main/example.tpl
+
+URI Retrieval:
+  The --provisioners and --patch-templates arguments support URI retrieval for pulling the contents from a URI on disk
+  or over the network. These support:
+    - HTTP        : http://host/file
+    - HTTPS       : https://host/file
+    - Git (SSH)   : git-ssh://git@host/repo.git/file
+    - Git (HTTPS) : git-https://host/repo.git/file
+    - OCI         : oci://[registry/][namespace/]repository[:tag|@digest][#file]
+    - Local File  : /path/to/local/file
+    - Stdin       : - (read from standard input)`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
+
+		initCmdPatchingFiles, _ := cmd.Flags().GetStringArray(initCmdPatchTemplateFlag)
+
+		var templates []string
+		for _, u := range initCmdPatchingFiles {
+			slog.Info(fmt.Sprintf("Fetching patch template from %s", u))
+			content, err := uriget.GetFile(cmd.Context(), u)
+			if err != nil {
+				return fmt.Errorf("error fetching patch template from %s: %w", u, err)
+			} else if err = patching.ValidatePatchTemplate(string(content)); err != nil {
+				return fmt.Errorf("error parsing patch template from %s: %w", u, err)
+			}
+			templates = append(templates, string(content))
+		}
 
 		sd, ok, err := project.LoadStateDirectory(".")
 		if err != nil {
 			return errors.Wrap(err, "failed to load existing state directory")
 		} else if ok {
 			slog.Info("Found existing state directory", "dir", sd.Path)
+			var hasChanges bool
+			if len(templates) > 0 {
+				sd.State.Extras.PatchingTemplates = templates
+				hasChanges = true
+			}
+			if hasChanges {
+				if err := sd.Persist(); err != nil {
+					return fmt.Errorf("failed to persist state file: %w", err)
+				}
+			}
 		} else {
 			slog.Info("Writing new state directory", "dir", project.DefaultRelativeStateDirectory)
 			sd = &project.StateDirectory{
 				Path: project.DefaultRelativeStateDirectory,
 				State: project.State{
+					Extras:      project.StateExtras{PatchingTemplates: templates},
 					Workloads:   map[string]framework.ScoreWorkloadState[project.WorkloadExtras]{},
 					Resources:   map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{},
 					SharedState: map[string]interface{}{},
@@ -167,11 +214,7 @@ the new provisioners will take precedence.
 func init() {
 	initCmd.Flags().StringP(initCmdFileFlag, "f", "score.yaml", "The score file to initialize")
 	initCmd.Flags().Bool(initCmdFileNoSampleFlag, false, "Disable generation of the sample score file")
-	initCmd.Flags().StringArray(initCmdProvisionerFlag, nil, "Provisioner files to install. May be specified multiple times. Supports:\n"+
-		"- HTTP        : http://host/file\n"+
-		"- HTTPS       : https://host/file\n"+
-		"- Git (SSH)   : git-ssh://git@host/repo.git/file\n"+
-		"- Git (HTTPS) : git-https://host/repo.git/file\n"+
-		"- OCI         : oci://[registry/][namespace/]repository[:tag|@digest][#file]")
+	initCmd.Flags().StringArray(initCmdProvisionerFlag, nil, "Provisioner files to install. May be specified multiple times. Supports URI retrieval.")
+	initCmd.Flags().StringArray(initCmdPatchTemplateFlag, nil, "Patching template files to include. May be specified multiple times. Supports URI retrieval.")
 	rootCmd.AddCommand(initCmd)
 }

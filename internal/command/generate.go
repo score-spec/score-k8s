@@ -36,6 +36,7 @@ import (
 
 	"github.com/score-spec/score-k8s/internal"
 	"github.com/score-spec/score-k8s/internal/convert"
+	"github.com/score-spec/score-k8s/internal/patching"
 	"github.com/score-spec/score-k8s/internal/project"
 	"github.com/score-spec/score-k8s/internal/provisioners"
 	"github.com/score-spec/score-k8s/internal/provisioners/loader"
@@ -228,7 +229,7 @@ manifests. All resources and links between Workloads will be resolved and provis
 				mSig := buildManifestSignature(intermediate)
 				outputManifests = slices.DeleteFunc(outputManifests, func(other map[string]interface{}) bool {
 					if buildManifestSignature(other) == mSig {
-						slog.Info(fmt.Sprintf("Overriding duplicate resource manifest %s", mSig))
+						slog.Debug(fmt.Sprintf("Overriding duplicate resource manifest %s", mSig))
 						return true
 					}
 					return false
@@ -239,11 +240,21 @@ manifests. All resources and links between Workloads will be resolved and provis
 		}
 
 		// patch manifests here
+		// TODO: deprecate this!
 		if v, _ := cmd.Flags().GetStringArray(generateCmdPatchManifestsFlag); len(v) > 0 {
 			for _, entry := range v {
+				slog.Warn(fmt.Sprintf("%s is deprecated and may be removed in a future version, please move to --patch-templates", generateCmdPatchManifestsFlag))
 				if outputManifests, err = parseAndApplyManifestPatches(entry, generateCmdPatchManifestsFlag, outputManifests); err != nil {
 					return err
 				}
+			}
+		}
+
+		for i, content := range state.Extras.PatchingTemplates {
+			slog.Info(fmt.Sprintf("Applying patching template %d", i+1))
+			outputManifests, err = patching.PatchServices(state, outputManifests, content)
+			if err != nil {
+				return fmt.Errorf("failed to patch template %d: %w", i+1, err)
 			}
 		}
 

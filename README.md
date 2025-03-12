@@ -71,6 +71,16 @@ empty state and default provisioners file into the '.score-k8s' subdirectory.
 The '.score-k8s' directory contains state that will be used to generate any Kubernetes resource manifests including
 potentially sensitive data and raw secrets, so this should not be checked into generic source control.
 
+Custom provisioners can be installed by uri using the --provisioners flag. The provisioners will be installed and take
+precedence in the order they are defined over the default provisioners. If init has already been called with provisioners
+the new provisioners will take precedence.
+
+To adjust the generated manifests, or perform post processing actions, you can use the --patch-templates flag to provide
+one or more template files by uri. Each template file is stored in the project and then evaluated as a 
+Golang text/template and should output a yaml/json encoded array of patches. Each patch is an object with required 'op' 
+(set or delete), 'patch' (a dot-separated json path), a 'value' if the 'op' == 'set', and an optional 'description' for 
+showing in the logs. The template has access to '.Manifests' and '.Workloads'.
+
 Usage:
   score-k8s init [flags]
 
@@ -78,17 +88,37 @@ Examples:
 
   # Initialise a new score-k8s project
   score-k8s init
+
   # Or disable the default score file generation if you already have a score file
   score-k8s init --no-sample
 
   # Optionally loading in provisoners from a remote url
   score-k8s init --provisioners https://raw.githubusercontent.com/user/repo/main/example.yaml
 
+  # Optionally adding a couple of patching templates
+  score-k8s init --patch-templates ./patching.tpl --patch-templates https://raw.githubusercontent.com/user/repo/main/example.tpl
+
+URI Retrieval:
+  The --provisioners and --patch-templates arguments support URI retrieval for pulling the contents from a URI on disk
+  or over the network. These support:
+    - HTTP        : http://host/file
+    - HTTPS       : https://host/file
+    - Git (SSH)   : git-ssh://git@host/repo.git/file
+    - Git (HTTPS) : git-https://host/repo.git/file
+    - OCI         : oci://[registry/][namespace/]repository[:tag|@digest][#file]
+    - Local File  : /path/to/local/file
+    - Stdin       : - (read from standard input)
+
 Flags:
-  -f, --file string                The score file to initialize (default "score.yaml")
-  -h, --help                       help for init
-      --no-sample                  Disable generation of the sample score file
-      --provisioners stringArray   A provisioners file to install. May be specified multiple times. Supports http://host/file, https://host/file, git-ssh://git@host/repo.git/file, git-https://host/repo.git/file and oci://[registry/][namespace/]repository[:tag|@digest][#file] formats.
+  -f, --file string                  The score file to initialize (default "score.yaml")
+  -h, --help                         help for init
+      --no-sample                    Disable generation of the sample score file
+      --patch-templates stringArray   Patching template files to include. May be specified multiple times. Supports URI retrieval.
+      --provisioners stringArray     Provisioner files to install. May be specified multiple times. Supports URI retrieval.
+
+Global Flags:
+      --quiet           Mute any logging output
+  -v, --verbose count   Increase log verbosity and detail by specifying this flag one or more times
 ```
 
 ### Generate
@@ -202,17 +232,64 @@ Other resources can be found at:
 
 `score-k8s` generates a Deployment by default or when the `k8s.score.dev/kind` workload metadata annotation is set to `Deployment`. If the annotation is set to `StatefulSet` it will generate a set and allow the use of claim templates as outputs from volume resources.
 
-### How do I configure the number of replicas for the workload?
+### How do I configure the number of replicas or security context for the workload deployment?
 
 `score-k8s` will always generate a deployment or set with 1 replica. The workload should be scaled to multiple replicas through either:
 
 1. Scale up in-cluster after deployment (`kubectl scale --replicas=3 deployment/my-workload`).
 2. Or, use a [Kustomize](https://kustomize.io/) patch to override the number of replicas with `kubectl apply -k`.
-3. Or, use the `--patch-manifests` CLI option to do `--patch-manifests 'Deployment/my-workload/spec.replicas=3'`.
+3. Or, use a `--patch-templates` template to set the `spec.replicas` in the relevant workloads (see further below).
 
 ### Which namespace will manifests be deployed into?
 
 Right now, no namespace is specified in the generated manifests so they will obey any `--namespace` passed to the `kubctl apply` command. All secret references are assumed to be in the same namespace as the workloads.
+
+### How do I modify the generated manifests or add and remove from them?
+
+Use the `--patch-templates` options. Patch templates are small Go Text Template files which can output a set of JSON "patch" operations on the list of manifests. This is intended to deprecate the `--patch-manifests` option.
+
+Template inputs:
+
+```
+.Manifests: the array of generated manifests from the Score conversion process
+.Workloads: the map of workload name to Score specification
+```
+
+The patch should follow this schema:
+
+```yaml
+type: object
+required: ["op", "path"]
+properties:
+  op:
+    description: The patch operation to perform at the path
+    type: string
+    enum: ["set", "delete"]
+  path:
+    description: "A .-separated JSON path. Numeric indexes can be used to reference array indices. -1 allows appending to an array. : can be used to escape an otherwise numeric index."
+    type: string
+  value:
+    description: The value to set at the path when a 'set' operation is used.
+  description:
+    description: An optional description which is included in the log output when the patch is applied
+    type: string
+```
+
+As an example, to set the replicas for the Deployment of the workload named 'example':
+
+```
+{{ range $i, $m := .Manifests }}
+{{ if and (eq $m.kind "Deployment") (eq (dig "metadata" "annotations" "k8s.score.dev/workload-name" "" $m) "example") }}
+- op: set
+  path: {{ $i }}.spec.replicas
+  value: 3
+  description: Increase the replicas for the example deployment
+{{ end }}
+{{ end }}
+```
+
+A similar approach can be done to inject security context restrictions, service accounts, labels, annotations, or to even convert a manifest from Deployment
+into a different Kubernetes `kind` entirely through a series of patch modifications.
 
 ### How do I test `score-k8s` with `kind` (Kubernetes in docker)?
 
