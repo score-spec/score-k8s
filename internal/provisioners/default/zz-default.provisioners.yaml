@@ -760,7 +760,7 @@
           spec:
             containers:
               - name: rabbitmq
-                image: rabbitmq:3-management
+                image: rabbitmq:3-management-alpine
                 ports:
                   - name: amqp
                     containerPort: 5672
