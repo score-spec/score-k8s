@@ -40,6 +40,11 @@
     secret-reference: 🔐💬secret-{{ .Guid }}_password💬🔐
     # A template function also exists for generating these in the template provisioner.
     secret-reference-alt: {{ encodeSecretRef (printf "secret-%s" .Guid) "password" }}
+  expected_outputs:
+    - plaintext
+    - nested
+    - secret-reference
+    - secret-reference-alt
   # (Optional) The manifests template gets evaluated as a list of Kubernetes object manifests to be added to the output.
   manifests: |
     - apiVersion: v1
@@ -91,6 +96,12 @@
     {{ if not $p }}{{ fail "unknown service port" }}{{ end }}
     hostname: {{ $w.ServiceName | quote }}
     port: {{ $p.TargetPort }}
+  expected_outputs:
+    - hostname
+    - port
+  supported_params:
+    - workload
+    - port
 
 # As an example we have a 'volume' type which returns an emptyDir volume.
 # In production or for real applications you may want to replace this with a provisioner for a tmpfs, host path, or
@@ -100,6 +111,8 @@
   outputs: |
     source:
       emptyDir: {}
+  expected_outputs:
+    - source
 
 # The default dns provisioner just outputs a random localhost domain because we don't know whether external-dns is
 # available. You should replace this with your own dns name generation that matches your external-dns controller.
@@ -111,6 +124,8 @@
     instanceHostname: {{ dig "instanceHostname" .Init.randomHostname .State | quote }}
   outputs: |
     host: {{ .State.instanceHostname }}
+  expected_outputs:
+    - host
 
 # Routes could be implemented as either traditional ingress resources or using the newer gateway API.
 # In this default provisioner we use the gateway API with some sensible defaults. But you may wish to replace this.
@@ -151,6 +166,10 @@
           backendRefs:
           - name: {{ (index .WorkloadServices .SourceWorkload).ServiceName }}
             port: {{ .Params.port }}
+  supported_params:
+    - host
+    - port
+    - path
 
 - uri: template://default-provisioners/postgres
   type: postgres
@@ -293,6 +312,13 @@
         ports:
         - port: 5432
           targetPort: 5432
+  expected_outputs:
+    - host
+    - port
+    - name
+    - database
+    - username
+    - password
 
 - uri: template://default-provisioners/redis
   type: redis
@@ -426,6 +452,11 @@
         ports:
         - port: 6379
           targetPort: 6379
+  expected_outputs:
+    - host
+    - port
+    - username
+    - password
 
 - uri: template://default-provisioners/mysql
   type: mysql
@@ -557,6 +588,13 @@
         ports:
         - port: 3306
           targetPort: 3306
+  expected_outputs:
+    - host
+    - port
+    - name
+    - database
+    - username
+    - password
 
 - uri: template://default-provisioners/mongo
   type: mongodb
@@ -698,6 +736,12 @@
         ports:
         - port: 27017
           targetPort: 27017
+  expected_outputs:
+    - host
+    - port
+    - username
+    - password
+    - connection
 
 - uri: template://default-provisioners/rabbitmq
   type: amqp
@@ -812,6 +856,12 @@
         selector:
           app.kubernetes.io/instance: {{ .State.service }}
         type: ClusterIP
+  expected_outputs:
+    - host
+    - port
+    - vhost
+    - username
+    - passwor
 
 - uri: template://default-provisioners/mssql
   type: mssql
@@ -929,6 +979,13 @@
         ports:
         - port: 1433
           targetPort: 1433
+  expected_outputs:
+    - server
+    - port
+    - connection
+    - database
+    - username
+    - password
 
 # This resource provides an in-cluster minio based S3 bucket with AWS-style credentials.
 # This provides some common and well known outputs that can be used with any generic AWS s3 client.
@@ -1092,3 +1149,11 @@
                   secretKeyRef:
                     name: {{ $service | quote }}
                     key: secret_key
+  expected_outputs:
+    - bucket
+    - access_key_id
+    - secret_key
+    - endpoint
+    - region
+    - aws_access_key_id
+    - aws_secret_key

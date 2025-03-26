@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -40,6 +41,7 @@ type Provisioner struct {
 	ResType        string  `yaml:"type"`
 	ResClass       *string `yaml:"class,omitempty"`
 	ResId          *string `yaml:"id,omitempty"`
+	ResDescription string  `yaml:"description,omitempty"`
 
 	// The InitTemplate is always evaluated first, it is used as temporary or working set data that may be needed in the
 	// later templates. It has access to the resource inputs and previous state.
@@ -52,6 +54,12 @@ type Provisioner struct {
 	OutputsTemplate string `yaml:"outputs,omitempty"`
 
 	ManifestsTemplate string `yaml:"manifests,omitempty"`
+
+	// SupportedParams is a list of parameters that the provisioner expects to be passed in.
+	SupportedParams []string `yaml:"supported_params,omitempty"`
+
+	// ExpectedOutputs is a list of expected outputs that the provisioner should return.
+	ExpectedOutputs []string `yaml:"expected_outputs,omitempty"`
 }
 
 func Parse(raw map[string]interface{}) (*Provisioner, error) {
@@ -83,6 +91,41 @@ func (p *Provisioner) Match(resUid framework.ResourceUid) bool {
 		return false
 	}
 	return true
+}
+
+func (p *Provisioner) Description() string {
+	return p.ResDescription
+}
+
+func (p *Provisioner) Class() string {
+	if p.ResClass == nil {
+		return "(any)"
+	}
+	return *p.ResClass
+}
+
+func (p *Provisioner) Type() string {
+	return p.ResType
+}
+
+func (p *Provisioner) Params() []string {
+	if p.SupportedParams == nil {
+		return []string{}
+	}
+	params := make([]string, len(p.SupportedParams))
+	copy(params, p.SupportedParams)
+	slices.Sort(params)
+	return params
+}
+
+func (p *Provisioner) Outputs() []string {
+	if p.ExpectedOutputs == nil {
+		return []string{}
+	}
+	outputs := make([]string, len(p.ExpectedOutputs))
+	copy(outputs, p.ExpectedOutputs)
+	slices.Sort(outputs)
+	return outputs
 }
 
 func renderTemplateAndDecode(raw string, data interface{}, out interface{}) error {
