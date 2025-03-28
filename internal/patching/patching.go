@@ -122,6 +122,7 @@ func PatchServices(state *project.State, manifests []map[string]interface{}, raw
 	decoder := json.NewDecoder(bytes.NewReader(jsonInput))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&output); err != nil {
+		slog.Debug("Failed to decode patched output", slog.String("output", string(jsonInput)))
 		return nil, fmt.Errorf("failed to unmarshal patched output: %w", err)
 	}
 	return output, nil
