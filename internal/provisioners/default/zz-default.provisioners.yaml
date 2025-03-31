@@ -217,7 +217,7 @@
             automountServiceAccountToken: false
             containers:
             - name: postgres-db
-              image: postgres:17-alpine
+              image: mirror.gcr.io/postgres:17-alpine
               ports:
               - name: postgres
                 containerPort: 5432
@@ -355,7 +355,7 @@
             automountServiceAccountToken: false
             containers:
             - name: redis
-              image: redis:7-alpine
+              image: mirror.gcr.io/redis:7-alpine
               securityContext:
                 allowPrivilegeEscalation: false
                 capabilities:
@@ -492,7 +492,7 @@
           spec:
             containers:
             - name: mysql-db
-              image: mysql:8
+              image: mirror.gcr.io/mysql:8
               ports:
               - name: mysql
                 containerPort: 3306
@@ -620,7 +620,7 @@
             automountServiceAccountToken: false
             containers:
             - name: mongo-db
-              image: mongo:latest
+              image: mirror.gcr.io/mongo:8
               ports:
               - name: mongo
                 containerPort: 27017
@@ -760,7 +760,7 @@
           spec:
             containers:
               - name: rabbitmq
-                image: rabbitmq:3-management-alpine
+                image: mirror.gcr.io/rabbitmq:3-management-alpine
                 ports:
                   - name: amqp
                     containerPort: 5672
