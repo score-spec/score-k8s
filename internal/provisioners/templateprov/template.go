@@ -54,6 +54,10 @@ type Provisioner struct {
 	ManifestsTemplate string `yaml:"manifests,omitempty"`
 }
 
+func (p *Provisioner) Deprovision(ctx context.Context, input *provisioners.Input) error {
+	return nil
+}
+
 func Parse(raw map[string]interface{}) (*Provisioner, error) {
 	p := new(Provisioner)
 	intermediate, _ := yaml.Marshal(raw)

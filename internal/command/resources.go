@@ -105,6 +105,18 @@ be returned as json.
 			return fmt.Errorf("no such resource '%s'", args[0])
 		},
 	}
+	deprovisionResources = &cobra.Command{
+		Use:   "deprovision",
+		Short: "Deprovision a resource by id",
+		Long: `Deprovision a resource from the state directory that has been provisioned within the past. This is only necessary
+for cmd:// provisioners that may have generated external state.`,
+		Args:          cobra.ExactArgs(1),
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
+		},
+	}
 )
 
 func init() {
@@ -112,6 +124,7 @@ func init() {
 
 	resourcesGroup.AddCommand(listResources)
 	resourcesGroup.AddCommand(getResourceOutputs)
+	resourcesGroup.AddCommand(deprovisionResources)
 
 	rootCmd.AddCommand(resourcesGroup)
 }
