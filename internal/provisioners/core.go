@@ -91,12 +91,14 @@ type Provisioner interface {
 	Uri() string
 	Match(resUid framework.ResourceUid) bool
 	Provision(ctx context.Context, input *Input) (*ProvisionOutput, error)
+	Deprovision(ctx context.Context, input *Input) error
 }
 
 type ephemeralProvisioner struct {
-	uri       string
-	matchUid  framework.ResourceUid
-	provision func(ctx context.Context, input *Input) (*ProvisionOutput, error)
+	uri         string
+	matchUid    framework.ResourceUid
+	provision   func(ctx context.Context, input *Input) (*ProvisionOutput, error)
+	deprovision func(ctx context.Context, input *Input) error
 }
 
 func (e *ephemeralProvisioner) Uri() string {
@@ -109,6 +111,10 @@ func (e *ephemeralProvisioner) Match(resUid framework.ResourceUid) bool {
 
 func (e *ephemeralProvisioner) Provision(ctx context.Context, input *Input) (*ProvisionOutput, error) {
 	return e.provision(ctx, input)
+}
+
+func (e *ephemeralProvisioner) Deprovision(ctx context.Context, input *Input) error {
+	return e.deprovision(ctx, input)
 }
 
 // NewEphemeralProvisioner is mostly used for internal testing and uses the given provisioner function to provision an exact resource.
@@ -261,6 +267,58 @@ func ProvisionResources(ctx context.Context, state *project.State, provisioners 
 			return nil, fmt.Errorf("resource '%s': failed to apply outputs: %w", resUid, err)
 		}
 	}
+
+	return out, nil
+}
+
+func DeprovisionResource(ctx context.Context, state *project.State, provisioners []Provisioner, resUid framework.ResourceUid) (*project.State, error) {
+	out := state
+	workloadServices := buildWorkloadServices(state)
+
+	resState := out.Resources[resUid]
+	provisionerIndex := slices.IndexFunc(provisioners, func(provisioner Provisioner) bool {
+		return provisioner.Match(resUid)
+	})
+	if provisionerIndex < 0 {
+		return nil, fmt.Errorf("resource '%s' is not supported by any provisioner. "+
+			"Please implement a custom resource provisioner to support this resource type.", resUid)
+	}
+	provisioner := provisioners[provisionerIndex]
+	if resState.ProvisionerUri != "" && resState.ProvisionerUri != provisioner.Uri() {
+		return nil, fmt.Errorf("resource '%s' was previously provisioned by a different provider - undefined behavior", resUid)
+	}
+
+	var params map[string]interface{}
+	if resState.Params != nil && len(resState.Params) > 0 {
+		resOutputs, err := out.GetResourceOutputForWorkload(resState.SourceWorkload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find resource params for resource '%s': %w", resUid, err)
+		}
+		sf := framework.BuildSubstitutionFunction(out.Workloads[resState.SourceWorkload].Spec.Metadata, resOutputs)
+		rawParams, err := framework.Substitute(resState.Params, sf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to substitute params for resource '%s': %w", resUid, err)
+		}
+		params = rawParams.(map[string]interface{})
+	}
+
+	err := provisioner.Deprovision(ctx, &Input{
+		ResourceGuid:     resState.Guid,
+		ResourceUid:      string(resUid),
+		ResourceType:     resUid.Type(),
+		ResourceClass:    resUid.Class(),
+		ResourceId:       resUid.Id(),
+		ResourceParams:   params,
+		ResourceMetadata: resState.Metadata,
+		ResourceState:    resState.State,
+		SourceWorkload:   resState.SourceWorkload,
+		WorkloadServices: workloadServices,
+		SharedState:      out.SharedState,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("resource '%s': failed to provision: %w", resUid, err)
+	}
+	delete(out.Resources, resUid)
 
 	return out, nil
 }

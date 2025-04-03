@@ -15,6 +15,7 @@
 package cmdprov
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -128,4 +129,25 @@ func TestProvision_fail_decode(t *testing.T) {
 		ResourceUid: "thing.default#w.r",
 	})
 	require.EqualError(t, err, "failed to decode output from cmd provisioner: invalid character 'b' looking for beginning of value")
+}
+
+func TestDeprovision_success(t *testing.T) {
+	p, err := Parse(map[string]interface{}{
+		"uri":  "cmd://sh",
+		"type": "thing",
+		"args": []string{"-c", "echo bananas $SCORE_PROVISIONER_MODE"},
+	})
+	require.NoError(t, err)
+
+	buff := new(bytes.Buffer)
+	defer func() {
+		stderr = os.Stderr
+	}()
+	stderr = buff
+
+	err = p.Deprovision(context.Background(), &provisioners.Input{
+		ResourceUid: "thing.default#w.r",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "bananas deprovision\n", buff.String())
 }

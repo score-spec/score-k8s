@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
 	"os"
@@ -31,6 +32,10 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/score-spec/score-k8s/internal/provisioners"
+)
+
+var (
+	stderr io.Writer = os.Stderr
 )
 
 type Provisioner struct {
@@ -104,20 +109,12 @@ func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) 
 		return nil, fmt.Errorf("failed to encode json input: %w", err)
 	}
 	outputBuffer := new(bytes.Buffer)
-
-	// if there is a <mode> arg, we mark it as "provision".
-	args := slices.Clone(p.Args)
-	for i, arg := range args {
-		if arg == "<mode>" {
-			args[i] = "provision"
-		}
-	}
-
-	cmd := exec.CommandContext(ctx, bin, args...)
-	slog.Debug(fmt.Sprintf("Executing '%s %v' for command provisioner", bin, args))
+	cmd := exec.CommandContext(ctx, bin, p.Args...)
+	cmd.Env = append(os.Environ(), fmt.Sprintf("SCORE_PROVISIONER_MODE=provision"))
+	slog.Debug(fmt.Sprintf("Executing '%s %v' for command provisioner", bin, p.Args))
 	cmd.Stdin = bytes.NewReader(rawInput)
 	cmd.Stdout = outputBuffer
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("failed to execute cmd provisioner: %w", err)
 	}
@@ -131,6 +128,30 @@ func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) 
 	}
 
 	return &output, nil
+}
+
+func (p *Provisioner) Deprovision(ctx context.Context, input *provisioners.Input) error {
+	bin, err := decodeBinary(p.Uri())
+	if err != nil {
+		return err
+	}
+
+	rawInput, err := json.Marshal(input)
+	if err != nil {
+		return fmt.Errorf("failed to encode json input: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, bin, p.Args...)
+	cmd.Env = append(os.Environ(), fmt.Sprintf("SCORE_PROVISIONER_MODE=deprovision"))
+	slog.Debug(fmt.Sprintf("Executing '%s %v' for command provisioner", bin, p.Args))
+	cmd.Stdin = bytes.NewReader(rawInput)
+	cmd.Stdout = stderr
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to execute cmd provisioner: %w", err)
+	}
+
+	return nil
 }
 
 func Parse(raw map[string]interface{}) (*Provisioner, error) {
