@@ -26,7 +26,7 @@ import (
 	"github.com/score-spec/score-k8s/internal/project"
 	"github.com/score-spec/score-k8s/internal/provisioners"
 	"github.com/score-spec/score-k8s/internal/provisioners/loader"
-	// "github.com/score-spec/score-k8s/internal/util"
+	"github.com/score-spec/score-go/formatter"
 )
 
 var (
@@ -72,7 +72,7 @@ func listProvisioners(cmd *cobra.Command, args []string) error {
 }
 
 func displayProvisioners(loadedProvisioners []provisioners.Provisioner, outputFormat string) error {
-	// 	var outputFormatter util.OutputFormatter
+	var outputFormatter formatter.OutputFormatter
 	sortedProvisioners := sortProvisionersByType(loadedProvisioners)
 
 	switch outputFormat {
@@ -84,41 +84,29 @@ func displayProvisioners(loadedProvisioners []provisioners.Provisioner, outputFo
 			Outputs     []string
 			Description string
 		}
-		headers := []string{"Type", "Class", "Params", "Outputs", "Description"}
-		fmt.Println(strings.Join(headers, ", "))
-		// var outputs []jsonData
+		var outputs []jsonData
 		for _, provisioner := range sortedProvisioners {
-			// outputs = append(outputs, jsonData{
-			// 	Type:        provisioner.Type(),
-			// 	Class:       provisioner.Class(),
-			// 	Params:      provisioner.Params(),
-			// 	Outputs:     provisioner.Outputs(),
-			// 	Description: provisioner.Description(),
-			// })
-			row := []string{provisioner.Type(), provisioner.Class(), strings.Join(provisioner.Params(), ", "), strings.Join(provisioner.Outputs(), ", "), provisioner.Description()}
-			fmt.Println(strings.Join(row, ", "))
+			outputs = append(outputs, jsonData{
+				Type:        provisioner.Type(),
+				Class:       provisioner.Class(),
+				Params:      provisioner.Params(),
+				Outputs:     provisioner.Outputs(),
+				Description: provisioner.Description(),
+			})
 		}
-		// outputFormatter = &util.JSONOutputFormatter[[]jsonData]{Data: outputs}
+		outputFormatter = &formatter.JSONOutputFormatter[[]jsonData]{Data: outputs}
 	default:
 		rows := [][]string{}
-
 		for _, provisioner := range sortedProvisioners {
 			rows = append(rows, []string{provisioner.Type(), provisioner.Class(), strings.Join(provisioner.Params(), ", "), strings.Join(provisioner.Outputs(), ", "), provisioner.Description()})
 		}
 		headers := []string{"Type", "Class", "Params", "Outputs", "Description"}
-		fmt.Println(strings.Join(headers, ", "))
-		for _, row := range rows {
-			fmt.Println(strings.Join(row, ", "))
+		outputFormatter = &formatter.TableOutputFormatter{
+			Headers: headers,
+			Rows:    rows,
 		}
-		// outputFormatter = &util.TableOutputFormatter{
-		// 	Headers: headers,
-		// 	Rows:    rows,
-		// }
 	}
-	// 	return outputFormatter.Display()
-	// }
-
-	return nil
+		return outputFormatter.Display()
 }
 
 func sortProvisionersByType(provisioners []provisioners.Provisioner) []provisioners.Provisioner {
