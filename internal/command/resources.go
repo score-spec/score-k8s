@@ -15,15 +15,16 @@
 package command
 
 import (
-	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
-	"github.com/score-spec/score-go/framework"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
+	"github.com/score-spec/score-go/formatter"
+	"github.com/score-spec/score-go/framework"
 	"github.com/score-spec/score-k8s/internal/project"
 )
 
@@ -57,11 +58,13 @@ after 'init' or 'generate' has been run. The list of uids will be empty if no re
 			if err != nil {
 				return fmt.Errorf("failed to sort resources: %w", err)
 			}
-			for _, id := range resIds {
-				_, _ = cmd.OutOrStdout().Write([]byte(id))
-				_, _ = cmd.OutOrStdout().Write([]byte("\n"))
+
+			if len(resIds) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No resources found")
+				return nil
 			}
-			return nil
+
+			return displayResourcesList(resIds, *currentState, cmd)
 		},
 	}
 	getResourceOutputs = &cobra.Command{
@@ -80,38 +83,116 @@ be returned as json.
 			} else if !ok {
 				return fmt.Errorf("state directory does not exist, please run \"score-k8s init\" first")
 			}
-			if res, ok := sd.State.Resources[framework.ResourceUid(args[0])]; ok {
-				outputs := res.Outputs
-				if outputs == nil {
-					outputs = make(map[string]interface{})
-				}
-				formatValue := cmd.Flags().Lookup(getOutputsCmdFormatFlag).Value.String()
-				switch formatValue {
-				case "json":
-					return json.NewEncoder(cmd.OutOrStdout()).Encode(outputs)
-				case "yaml":
-					return yaml.NewEncoder(cmd.OutOrStdout()).Encode(outputs)
-				default:
-					prepared, err := template.New("").Funcs(sprig.FuncMap()).Parse(formatValue)
-					if err != nil {
-						return fmt.Errorf("failed to parse format template: %w", err)
-					}
-					if err := prepared.Execute(cmd.OutOrStdout(), outputs); err != nil {
-						return fmt.Errorf("failed to execute template: %w", err)
-					}
-					return nil
-				}
+
+			resourceOuptuts, err := getResourceOutputsByUid(framework.ResourceUid(args[0]), &sd.State)
+			if err != nil {
+				return fmt.Errorf("no such resource '%s'", args[0])
 			}
-			return fmt.Errorf("no such resource '%s'", args[0])
+
+			return displayResourcesOutputs(resourceOuptuts, cmd)
 		},
 	}
 )
 
+func getResourceOutputsByUid(uid framework.ResourceUid, state *project.State) (map[string]interface{}, error) {
+	if res, ok := state.Resources[uid]; ok {
+		outputs := res.Outputs
+		if outputs == nil {
+			outputs = make(map[string]interface{})
+		}
+		return outputs, nil
+	}
+	return nil, fmt.Errorf("no such resource '%s'", uid)
+}
+
+func getResourceOutputsKeys(uid framework.ResourceUid, state *project.State) ([]string, error) {
+	outputs, err := getResourceOutputsByUid(uid, state)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(outputs))
+	for key, _ := range outputs {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys, nil
+}
+
+func displayResourcesOutputs(outputs map[string]interface{}, cmd *cobra.Command) error {
+	outputFormat := cmd.Flags().Lookup(getOutputsCmdFormatFlag).Value.String()
+	var outputFormatter formatter.OutputFormatter
+	switch outputFormat {
+	case "json":
+		outputFormatter = &formatter.JSONOutputFormatter[map[string]interface{}]{Data: outputs, Out: cmd.OutOrStdout()}
+	case "yaml":
+		outputFormatter = &formatter.YAMLOutputFormatter[map[string]interface{}]{Data: outputs, Out: cmd.OutOrStdout()}
+	default:
+		// ensure there is a new line at the end if one is not already present
+		if !strings.HasSuffix(outputFormat, "\n") {
+			outputFormat += "\n"
+		}
+		prepared, err := template.New("").Funcs(sprig.FuncMap()).Parse(outputFormat)
+		if err != nil {
+			return fmt.Errorf("failed to parse format template: %w", err)
+		}
+		if err := prepared.Execute(cmd.OutOrStdout(), outputs); err != nil {
+			return fmt.Errorf("failed to execute template: %w", err)
+		}
+		return nil
+	}
+
+	return outputFormatter.Display()
+}
+
+func displayResourcesList(resources []framework.ResourceUid, state project.State, cmd *cobra.Command) error {
+	outputFormat := cmd.Flags().Lookup(getOutputsCmdFormatFlag).Value.String()
+	var outputFormatter formatter.OutputFormatter
+
+	switch outputFormat {
+	case "json":
+		type jsonData struct {
+			UID     string
+			Outputs []string
+		}
+		var outputs []jsonData
+		for _, resource := range resources {
+
+			keys, err := getResourceOutputsKeys(resource, &state)
+			if err != nil {
+				return fmt.Errorf("failed to get outputs for resource '%s': %w", resource, err)
+			}
+			outputs = append(outputs, jsonData{
+				UID:     string(resource),
+				Outputs: keys,
+			})
+		}
+		outputFormatter = &formatter.JSONOutputFormatter[[]jsonData]{Data: outputs, Out: cmd.OutOrStdout()}
+	default:
+		var rows [][]string
+		for _, resource := range resources {
+			keys, err := getResourceOutputsKeys(resource, &state)
+			if err != nil {
+				return fmt.Errorf("failed to get outputs for resource '%s': %w", resource, err)
+			}
+			row := []string{string(resource), strings.Join(keys, ", ")}
+			rows = append(rows, row)
+		}
+		outputFormatter = &formatter.TableOutputFormatter{
+			Headers: []string{"UID", "Outputs"},
+			Rows:    rows,
+			Out:     cmd.OutOrStdout(),
+		}
+	}
+
+	return outputFormatter.Display()
+}
+
 func init() {
 	getResourceOutputs.Flags().StringP(getOutputsCmdFormatFlag, "f", "json", "Format of the output: json, yaml, or a Go template with sprig functions")
+	listResources.Flags().StringP(getOutputsCmdFormatFlag, "f", "table", "Format of the output: table, json, or a Go template with sprig functions")
 
-	resourcesGroup.AddCommand(listResources)
 	resourcesGroup.AddCommand(getResourceOutputs)
+	resourcesGroup.AddCommand(listResources)
 
 	rootCmd.AddCommand(resourcesGroup)
 }
