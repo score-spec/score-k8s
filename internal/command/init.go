@@ -34,10 +34,11 @@ import (
 )
 
 const (
-	initCmdFileFlag          = "file"
-	initCmdFileNoSampleFlag  = "no-sample"
-	initCmdProvisionerFlag   = "provisioners"
-	initCmdPatchTemplateFlag = "patch-templates"
+	initCmdFileFlag                  = "file"
+	initCmdFileNoSampleFlag          = "no-sample"
+	initCmdProvisionerFlag           = "provisioners"
+	initCmdPatchTemplateFlag         = "patch-templates"
+	initCmdNoDefaultProvisionersFlag = "no-default-provisioners"
 )
 
 var initCmd = &cobra.Command{
@@ -133,20 +134,25 @@ URI Retrieval:
 			}
 		}
 
-		defaultProvisioners := filepath.Join(sd.Path, "zz-default.provisioners.yaml")
-		if _, err := os.Stat(defaultProvisioners); err != nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				return errors.Wrapf(err, "failed to check for existing default provisioners file")
-			}
-			if err := os.WriteFile(defaultProvisioners, []byte(_default.DefaultProvisioners), 0644); err != nil {
-				if errors.Is(err, os.ErrExist) {
-					return errors.Errorf("default provisioners file '%s' already exists", defaultProvisioners)
+		disableDefaultProvisioners, _ := cmd.Flags().GetBool(initCmdNoDefaultProvisionersFlag)
+		if !disableDefaultProvisioners {
+			defaultProvisioners := filepath.Join(sd.Path, "zz-default.provisioners.yaml")
+			if _, err := os.Stat(defaultProvisioners); err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					return errors.Wrapf(err, "failed to check for existing default provisioners file")
 				}
-				return errors.Wrap(err, "failed to open default provisioners file")
+				if err := os.WriteFile(defaultProvisioners, []byte(_default.DefaultProvisioners), 0644); err != nil {
+					if errors.Is(err, os.ErrExist) {
+						return errors.Errorf("default provisioners file '%s' already exists", defaultProvisioners)
+					}
+					return errors.Wrap(err, "failed to open default provisioners file")
+				}
+				slog.Info("Created default provisioners file", "file", defaultProvisioners)
+			} else {
+				slog.Info("Skipping creation of default provisioners file since it already exists", "file", defaultProvisioners)
 			}
-			slog.Info("Created default provisioners file", "file", defaultProvisioners)
 		} else {
-			slog.Info("Skipping creation of default provisioners file since it already exists", "file", defaultProvisioners)
+			slog.Info("Skipping creation of default provisioners file since it has been disabled")
 		}
 
 		initCmdScoreFile, _ := cmd.Flags().GetString(initCmdFileFlag)
@@ -216,5 +222,6 @@ func init() {
 	initCmd.Flags().Bool(initCmdFileNoSampleFlag, false, "Disable generation of the sample score file")
 	initCmd.Flags().StringArray(initCmdProvisionerFlag, nil, "Provisioner files to install. May be specified multiple times. Supports URI retrieval.")
 	initCmd.Flags().StringArray(initCmdPatchTemplateFlag, nil, "Patching template files to include. May be specified multiple times. Supports URI retrieval.")
+	initCmd.Flags().Bool(initCmdNoDefaultProvisionersFlag, false, "Disable generation of the default provisioners file")
 	rootCmd.AddCommand(initCmd)
 }
