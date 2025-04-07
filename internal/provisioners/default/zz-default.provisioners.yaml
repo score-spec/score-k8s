@@ -3,6 +3,7 @@
 - uri: template://example-provisioners/example-provisioner
   # (Required) Which resource type to match
   type: example-provisioner-resource
+  description: Example provisioner that runs a template
   # (Optional) Which 'class' of the resource. Null will match any class, a non-empty value like 'default' will match
   # only resources of that class.
   class: null
@@ -40,6 +41,11 @@
     secret-reference: 🔐💬secret-{{ .Guid }}_password💬🔐
     # A template function also exists for generating these in the template provisioner.
     secret-reference-alt: {{ encodeSecretRef (printf "secret-%s" .Guid) "password" }}
+  expected_outputs:
+    - plaintext
+    - nested
+    - secret-reference
+    - secret-reference-alt
   # (Optional) The manifests template gets evaluated as a list of Kubernetes object manifests to be added to the output.
   manifests: |
     - apiVersion: v1
@@ -71,6 +77,7 @@
 # with "." it is interpreted as a relative path, if it starts with "~" it resolves to the home directory.
 - uri: cmd://bash#example-provisioner
   type: example-provisioner-resource
+  description: Example provisioner that runs a bash script
   class: default
   id: specific
   # (Optional) additional args that the binary gets run with
@@ -82,6 +89,7 @@
 # relationship yet.
 - uri: template://default-provisioners/service-port
   type: service-port
+  description: Outputs a hostname and port for connecting to another workload
   outputs: |
     {{ if not .Params.workload }}{{ fail "expected 'workload' param for the target workload name" }}{{ end }}
     {{ if not .Params.port }}{{ fail "expected 'port' param for the name of the target workload service port" }}{{ end }}
@@ -91,31 +99,44 @@
     {{ if not $p }}{{ fail "unknown service port" }}{{ end }}
     hostname: {{ $w.ServiceName | quote }}
     port: {{ $p.TargetPort }}
+  expected_outputs:
+    - hostname
+    - port
+  supported_params:
+    - workload
+    - port
 
 # As an example we have a 'volume' type which returns an emptyDir volume.
 # In production or for real applications you may want to replace this with a provisioner for a tmpfs, host path, or
 # persistent volume and claims.
 - uri: template://default-provisioners/volume
   type: volume
+  description: Creates a persistent volume that can be mounted on a workload
   outputs: |
     source:
       emptyDir: {}
+  expected_outputs:
+    - source
 
 # The default dns provisioner just outputs a random localhost domain because we don't know whether external-dns is
 # available. You should replace this with your own dns name generation that matches your external-dns controller.
 - uri: template://default-provisioners/dns
   type: dns
+  description: Outputs a *.localhost domain as the hostname
   init: |
     randomHostname: dns{{ randAlphaNum 6 | lower }}.localhost
   state: |
     instanceHostname: {{ dig "instanceHostname" .Init.randomHostname .State | quote }}
   outputs: |
     host: {{ .State.instanceHostname }}
+  expected_outputs:
+    - host
 
 # Routes could be implemented as either traditional ingress resources or using the newer gateway API.
 # In this default provisioner we use the gateway API with some sensible defaults. But you may wish to replace this.
 - uri: template://default-provisioners/route
   type: route
+  description: Provisions a ingress route on a shared nginx instance
   init: |
     {{ if not (regexMatch "^/|(/([^/]+))+$" .Params.path) }}{{ fail "params.path start with a / but cannot end with /" }}{{ end }}
     {{ if not (regexMatch "^[a-z0-9_.-]{1,253}$" .Params.host) }}{{ fail (cat "params.host must be a valid hostname but was" .Params.host) }}{{ end }}
@@ -151,9 +172,14 @@
           backendRefs:
           - name: {{ (index .WorkloadServices .SourceWorkload).ServiceName }}
             port: {{ .Params.port }}
+  supported_params:
+    - host
+    - port
+    - path
 
 - uri: template://default-provisioners/postgres
   type: postgres
+  description: Provisions a dedicated database on a shared postgres instance
   init: |
     randomDatabase: db-{{ randAlpha 8 }}
     randomUsername: user-{{ randAlpha 8 }}
@@ -293,9 +319,17 @@
         ports:
         - port: 5432
           targetPort: 5432
+  expected_outputs:
+    - host
+    - port
+    - name
+    - database
+    - username
+    - password
 
 - uri: template://default-provisioners/redis
   type: redis
+  description: Provisions a dedicated redis instance
   init: |
     randomPassword: {{ randAlphaNum 16 | quote }}
   state: |
@@ -426,9 +460,15 @@
         ports:
         - port: 6379
           targetPort: 6379
+  expected_outputs:
+    - host
+    - port
+    - username
+    - password
 
 - uri: template://default-provisioners/mysql
   type: mysql
+  description: Provisions a dedicated mysql database on a shared instance
   init: |
     randomDatabase: db-{{ randAlpha 8 }}
     randomUsername: user-{{ randAlpha 8 }}
@@ -557,9 +597,17 @@
         ports:
         - port: 3306
           targetPort: 3306
+  expected_outputs:
+    - host
+    - port
+    - name
+    - database
+    - username
+    - password
 
 - uri: template://default-provisioners/mongo
   type: mongodb
+  description: Provisions a dedicated mongodb database
   init: |
     randomUsername: user-{{ randAlpha 8 }}
     randomPassword: {{ randAlphaNum 16 | quote }}
@@ -698,9 +746,16 @@
         ports:
         - port: 27017
           targetPort: 27017
+  expected_outputs:
+    - host
+    - port
+    - username
+    - password
+    - connection
 
 - uri: template://default-provisioners/rabbitmq
   type: amqp
+  description: Provisions a dedicated rabbitmq vhost on a shared instance
   init: |
     randomVHost: vhost-{{ randAlpha 8 }}
     randomUsername: user-{{ randAlpha 8 }}
@@ -812,9 +867,16 @@
         selector:
           app.kubernetes.io/instance: {{ .State.service }}
         type: ClusterIP
+  expected_outputs:
+    - host
+    - port
+    - vhost
+    - username
+    - passwor
 
 - uri: template://default-provisioners/mssql
   type: mssql
+  description: Provisions a dedicated database on a shared SQL server instance
   init: |
     randomPassword: {{ randAlphaNum 16 | quote }}
   state: |
@@ -929,12 +991,20 @@
         ports:
         - port: 1433
           targetPort: 1433
+  expected_outputs:
+    - server
+    - port
+    - connection
+    - database
+    - username
+    - password
 
 # This resource provides an in-cluster minio based S3 bucket with AWS-style credentials.
 # This provides some common and well known outputs that can be used with any generic AWS s3 client.
 # The outputs of the provisioner are a stateful set, a service, a secret, and a job per bucket.
 - uri: template://default-provisioners/s3
   type: s3
+  description: Provisions a dedicated S3 bucket with AWS-style credentials on a shared minio instance
   # The init template contains some initial seed data that can be used t needed.
   init: |
     sk: default-provisioners-minio-instance
@@ -1092,3 +1162,11 @@
                   secretKeyRef:
                     name: {{ $service | quote }}
                     key: secret_key
+  expected_outputs:
+    - bucket
+    - access_key_id
+    - secret_key
+    - endpoint
+    - region
+    - aws_access_key_id
+    - aws_secret_key

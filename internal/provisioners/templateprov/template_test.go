@@ -28,8 +28,11 @@ import (
 func TestProvision(t *testing.T) {
 	resUid := framework.NewResourceUid("w", "r", "thing", nil, nil)
 	p, err := Parse(map[string]interface{}{
-		"uri":  "template://example",
-		"type": resUid.Type(),
+		"uri":              "template://example",
+		"type":             resUid.Type(),
+		"description":      "desc",
+		"expected_outputs": []string{"b", "c"},
+		"supported_params": []string{"ptest"},
 		"init": `
 a: {{ .Uid }}
 b: {{ .Type }}
@@ -74,4 +77,8 @@ c: {{ .Shared.c }}
 	assert.Equal(t, map[string]interface{}{"c": 1}, out.SharedState)
 	assert.Equal(t, map[string]interface{}{"b": "STUFF", "c": 1}, out.ResourceOutputs)
 	assert.Len(t, out.Manifests, 1)
+	assert.Equal(t, []string{"b", "c"}, p.Outputs())
+	assert.Equal(t, []string{"ptest"}, p.Params())
+	assert.Equal(t, "(any)", p.Class())
+	assert.Equal(t, resUid.Type(), p.Type())
 }
