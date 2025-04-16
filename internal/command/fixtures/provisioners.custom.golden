@@ -140,17 +140,142 @@
     - psh1
 
 - uri: template://test-provisioners/without-class-without-params-with-description
-  type: without-class-without-params
+  type: without-class-without-params-with-description
   expected_outputs:
     - o1
     - o2
   description: without-class-without-params-with-description
 
-- uri: cmd://test-provisioners/cmd-without-class-with-params-with-outputs
-  type: cmd-without-class-with-params-with-outputs
+
+
+- uri: cmd://test-provisioners/without-class-without-params
+  type: cmd-without-class-without-params
+  expected_outputs:
+    - o1
+    - o2
+
+- uri: cmd://test-provisioners/with-class-without-params
+  type: cmd-with-class-without-params
+  class: c1
+  expected_outputs:
+    - o1
+    - o2
+
+- uri: cmd://test-provisioners/without-class-with-params-in-outputs
+  type: cmd-without-class-with-params-in-outputs
   expected_outputs:
     - o1
     - o2
   supported_params:
     - p1
-    - p2
+    - po1
+
+- uri: cmd://test-provisioners/with-class-with-params-in-outputs
+  type: cmd-with-class-with-params-in-outputs
+  class: c1
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - po1
+
+- uri: cmd://test-provisioners/without-class-with-params-in-shared
+  type: cmd-without-class-with-params-in-shared
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - psh1
+
+- uri: cmd://test-provisioners/with-class-with-params-in-shared
+  type: cmd-with-class-with-params-in-shared
+  class: c1
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - psh1
+
+- uri: cmd://test-provisioners/without-class-with-params-in-state
+  type: cmd-without-class-with-params-in-state
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - psh1
+
+- uri: cmd://test-provisioners/without-class-with-params-in-shared-outputs
+  type: cmd-without-class-with-params-in-shared-outputs
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - po1
+    - psh1
+
+- uri: cmd://test-provisioners/with-class-with-params-in-shared-outputs
+  type: cmd-with-class-with-params-in-shared-outputs
+  class: c1
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - po1
+    - psh1
+
+- uri: cmd://test-provisioners/without-class-with-params-in-state-outputs
+  type: cmd-without-class-with-params-in-state-outputs
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - po1
+    - pst1
+
+- uri: cmd://test-provisioners/with-class-with-params-in-state-outputs
+  type: cmd-with-class-with-params-in-state-outputs
+  class: c1
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - po1
+    - pst1
+
+- uri: cmd://test-provisioners/without-class-with-params-in-state-outputs-state-shared
+  type: cmd-without-class-with-params-in-state-outputs-shared
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - po1
+    - pst1
+    - psh1
+
+- uri: cmd://test-provisioners/with-class-with-params-in-state-outputs-shared
+  type: cmd-with-class-with-params-in-state-outputs-shared
+  class: c1
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - po1
+    - pst1
+    - psh1
+
+- uri: cmd://test-provisioners/without-class-without-params-with-description
+  type: cmd-without-class-without-params-with-description
+  expected_outputs:
+    - o1
+    - o2
+  description: cmd-without-class-without-params-with-description
