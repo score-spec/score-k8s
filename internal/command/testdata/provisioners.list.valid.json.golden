@@ -1,5 +1,18 @@
 [
   {
+    "Type": "cmd-without-class-with-params-with-outputs",
+    "Class": "(any)",
+    "Params": [
+      "p1",
+      "p2"
+    ],
+    "Outputs": [
+      "o1",
+      "o2"
+    ],
+    "Description": ""
+  },
+  {
     "Type": "with-class-with-params-in-outputs",
     "Class": "c1",
     "Params": [

@@ -145,3 +145,12 @@
     - o1
     - o2
   description: without-class-without-params-with-description
+
+- uri: cmd://test-provisioners/cmd-without-class-with-params-with-outputs
+  type: cmd-without-class-with-params-with-outputs
+  expected_outputs:
+    - o1
+    - o2
+  supported_params:
+    - p1
+    - p2
