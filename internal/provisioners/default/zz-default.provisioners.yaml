@@ -83,6 +83,9 @@
   # (Optional) additional args that the binary gets run with
   # If any of the args are '<mode>' it will be replaced with "provision"
   args: ["-c", "echo '{\"resource_outputs\":{\"key\":\"value\",\"secret\":\"🔐💬mysecret_mykey💬🔐\"},\"manifests\":[]}'"]
+  expected_outputs:
+    - key
+    - secret
 
 # The default provisioner for service resources, this expects a workload and port name and will return the hostname and
 # port required to contact it. This will validate that the workload and port exist, but won't enforce a dependency
