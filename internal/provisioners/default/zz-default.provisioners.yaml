@@ -3,7 +3,7 @@
 - uri: template://example-provisioners/example-provisioner
   # (Required) Which resource type to match
   type: example-provisioner-resource
-  description: Example provisioner that runs a template
+  description: Example provisioner that runs a template.
   # (Optional) Which 'class' of the resource. Null will match any class, a non-empty value like 'default' will match
   # only resources of that class.
   class: null
@@ -77,7 +77,7 @@
 # with "." it is interpreted as a relative path, if it starts with "~" it resolves to the home directory.
 - uri: cmd://bash#example-provisioner
   type: example-provisioner-resource
-  description: Example provisioner that runs a bash script
+  description: Example provisioner that runs a bash script.
   class: default
   id: specific
   # (Optional) additional args that the binary gets run with
@@ -92,7 +92,7 @@
 # relationship yet.
 - uri: template://default-provisioners/service-port
   type: service-port
-  description: Outputs a hostname and port for connecting to another workload
+  description: Outputs a hostname and port for connecting to another workload.
   outputs: |
     {{ if not .Params.workload }}{{ fail "expected 'workload' param for the target workload name" }}{{ end }}
     {{ if not .Params.port }}{{ fail "expected 'port' param for the name of the target workload service port" }}{{ end }}
@@ -114,7 +114,7 @@
 # persistent volume and claims.
 - uri: template://default-provisioners/volume
   type: volume
-  description: Creates a persistent volume that can be mounted on a workload
+  description: Creates a persistent volume that can be mounted on a workload.
   outputs: |
     source:
       emptyDir: {}
@@ -125,7 +125,7 @@
 # available. You should replace this with your own dns name generation that matches your external-dns controller.
 - uri: template://default-provisioners/dns
   type: dns
-  description: Outputs a *.localhost domain as the hostname
+  description: Outputs a *.localhost domain as the hostname.
   init: |
     randomHostname: dns{{ randAlphaNum 6 | lower }}.localhost
   state: |
@@ -139,7 +139,7 @@
 # In this default provisioner we use the gateway API with some sensible defaults. But you may wish to replace this.
 - uri: template://default-provisioners/route
   type: route
-  description: Provisions a ingress route on a shared nginx instance
+  description: Provisions an HTTPRoute on a shared Nginx instance.
   init: |
     {{ if not (regexMatch "^/|(/([^/]+))+$" .Params.path) }}{{ fail "params.path start with a / but cannot end with /" }}{{ end }}
     {{ if not (regexMatch "^[a-z0-9_.-]{1,253}$" .Params.host) }}{{ fail (cat "params.host must be a valid hostname but was" .Params.host) }}{{ end }}
@@ -182,7 +182,7 @@
 
 - uri: template://default-provisioners/postgres
   type: postgres
-  description: Provisions a dedicated database on a shared postgres instance
+  description: Provisions a dedicated database on a shared PostgreSQL instance.
   init: |
     randomDatabase: db-{{ randAlpha 8 }}
     randomUsername: user-{{ randAlpha 8 }}
@@ -332,7 +332,7 @@
 
 - uri: template://default-provisioners/redis
   type: redis
-  description: Provisions a dedicated redis instance
+  description: Provisions a dedicated Redis instance.
   init: |
     randomPassword: {{ randAlphaNum 16 | quote }}
   state: |
@@ -471,7 +471,7 @@
 
 - uri: template://default-provisioners/mysql
   type: mysql
-  description: Provisions a dedicated mysql database on a shared instance
+  description: Provisions a dedicated MySQL database on a shared instance.
   init: |
     randomDatabase: db-{{ randAlpha 8 }}
     randomUsername: user-{{ randAlpha 8 }}
@@ -610,7 +610,7 @@
 
 - uri: template://default-provisioners/mongo
   type: mongodb
-  description: Provisions a dedicated mongodb database
+  description: Provisions a dedicated MongoDB database.
   init: |
     randomUsername: user-{{ randAlpha 8 }}
     randomPassword: {{ randAlphaNum 16 | quote }}
@@ -758,7 +758,7 @@
 
 - uri: template://default-provisioners/rabbitmq
   type: amqp
-  description: Provisions a dedicated rabbitmq vhost on a shared instance
+  description: Provisions a dedicated RabbitMQ vhost on a shared instance.
   init: |
     randomVHost: vhost-{{ randAlpha 8 }}
     randomUsername: user-{{ randAlpha 8 }}
@@ -875,11 +875,11 @@
     - port
     - vhost
     - username
-    - passwor
+    - password
 
 - uri: template://default-provisioners/mssql
   type: mssql
-  description: Provisions a dedicated database on a shared SQL server instance
+  description: Provisions a dedicated database on a shared MS SQL server instance.
   init: |
     randomPassword: {{ randAlphaNum 16 | quote }}
   state: |
@@ -1007,7 +1007,7 @@
 # The outputs of the provisioner are a stateful set, a service, a secret, and a job per bucket.
 - uri: template://default-provisioners/s3
   type: s3
-  description: Provisions a dedicated S3 bucket with AWS-style credentials on a shared minio instance
+  description: Provisions a dedicated S3 bucket with AWS-style credentials on a shared MinIO instance.
   # The init template contains some initial seed data that can be used t needed.
   init: |
     sk: default-provisioners-minio-instance
