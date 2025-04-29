@@ -126,9 +126,9 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			}
 		}
 
-		for i, f := range container.Files {
-			if mount, cfg, vol, err := convertContainerFile(i, f, fmt.Sprintf("%s-%s-", workloadName, containerName), state.Workloads[workloadName].File, sf); err != nil {
-				return nil, errors.Wrapf(err, "containers.%s.files.%d: failed to convert", containerName, i)
+		for target, f := range container.Files {
+			if mount, cfg, vol, err := convertContainerFile(target, f, fmt.Sprintf("%s-%s-", workloadName, containerName), state.Workloads[workloadName].File, sf); err != nil {
+				return nil, errors.Wrapf(err, "containers.%s.files.%s: failed to convert", containerName, target)
 			} else {
 				containerVolumeMounts = append(containerVolumeMounts, mount)
 				if cfg != nil {

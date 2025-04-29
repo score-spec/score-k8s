@@ -31,14 +31,14 @@ import (
 )
 
 func convertContainerVolume(
-	index int, volume scoretypes.ContainerVolumesElem,
+	target string, volume scoretypes.ContainerVolume,
 	resources map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras],
 	substitutionFunc func(string) (string, error),
 ) (coreV1.VolumeMount, *coreV1.Volume, *coreV1.PersistentVolumeClaim, error) {
-	volName := fmt.Sprintf("vol-%d", index)
+	volName := fmt.Sprintf("vol-%s", target)
 	mount := coreV1.VolumeMount{
 		Name:      volName,
-		MountPath: volume.Target,
+		MountPath: target,
 		SubPath:   internal.DerefOr(volume.Path, ""),
 		ReadOnly:  internal.DerefOr(volume.ReadOnly, false),
 	}
