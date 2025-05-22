@@ -58,8 +58,9 @@ the new provisioners will take precedence.
 To adjust the generated manifests, or perform post processing actions, you can use the --patch-templates flag to provide
 one or more template files by uri. Each template file is stored in the project and then evaluated as a 
 Golang text/template and should output a yaml/json encoded array of patches. Each patch is an object with required 'op' 
-(set or delete), 'patch' (a dot-separated json path), a 'value' if the 'op' == 'set', and an optional 'description' for 
-showing in the logs. The template has access to '.Manifests' and '.Workloads'.
+(set or delete), 'path' (a dot-separated json path), a 'value' if the 'op' == 'set', and an optional 'description' for 
+showing in the logs. The template has access to '.Manifests' and '.Workloads'. Note, if you are deleting manifests or
+keys, these operations should be done last wherever possible to avoid breaking the patch.
 `,
 	Example: `
   # Initialise a new score-k8s project
@@ -71,8 +72,17 @@ showing in the logs. The template has access to '.Manifests' and '.Workloads'.
   # Optionally loading in provisoners from a remote url
   score-k8s init --provisioners https://raw.githubusercontent.com/user/repo/main/example.yaml
 
-  # Optionally adding a couple of patching templates
+  # Optionally adding a couple of patching templates, see below for an example of a patching template.
   score-k8s init --patch-templates ./patching.tpl --patch-templates https://raw.githubusercontent.com/user/repo/main/example.tpl
+  patching.tpl: |
+    {{ range $i, $m := .Manifests }}
+	{{ $name := dig "metadata" "labels" "app.kubernetes.io/name" "" $m}}
+	{{ if and (eq $m.kind "Service") (eq $name "fizzbuzz") }}
+	- op: set
+	  path: {{ $i }}.spec.type
+	  value: ClusterIP
+	{{ end }}
+	{{ end }}
 
 URI Retrieval:
   The --provisioners and --patch-templates arguments support URI retrieval for pulling the contents from a URI on disk
@@ -109,6 +119,7 @@ URI Retrieval:
 			slog.Info("Found existing state directory", "dir", sd.Path)
 			var hasChanges bool
 			if len(templates) > 0 {
+				slog.Info("Updating patching templates..")
 				sd.State.Extras.PatchingTemplates = templates
 				hasChanges = true
 			}
