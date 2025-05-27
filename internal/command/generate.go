@@ -48,6 +48,8 @@ const (
 	generateCmdImageFlag            = "image"
 	generateCmdOutputFlag           = "output"
 	generateCmdPatchManifestsFlag   = "patch-manifests"
+	generateCmdNamespaceFlag        = "namespace"
+	generateCmdGenerateNamespaceFlag = "generate-namespace"
 )
 
 var generateCmd = &cobra.Command{
@@ -73,10 +75,23 @@ manifests. All resources and links between Workloads will be resolved and provis
   score-k8s generate score.yaml --override-file=./overrides.score.yaml --override-property=metadata.key=value
 
   # Patch resulting manifests
-  score-k8s generate score.yaml --patch-manifests */*/metadata.annotations.key=value --patch-manifests Deployment/foo/spec.replicas=4`,
+  score-k8s generate score.yaml --patch-manifests */*/metadata.annotations.key=value --patch-manifests Deployment/foo/spec.replicas=4
+
+  # Set namespace for all resources
+  score-k8s generate score.yaml --namespace=test-ns
+
+  # Generate namespace manifest and set namespace for all resources
+  score-k8s generate score.yaml --namespace=test-ns --generate-namespace`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
+
+		// Check if generate-namespace is set without namespace
+		generateNamespace, _ := cmd.Flags().GetBool(generateCmdGenerateNamespaceFlag)
+		namespace, _ := cmd.Flags().GetString(generateCmdNamespaceFlag)
+		if generateNamespace && namespace == "" {
+			return fmt.Errorf("--generate-namespace was used but --namespace was not provided")
+		}
 
 		sd, ok, err := project.LoadStateDirectory(".")
 		if err != nil {
@@ -239,6 +254,37 @@ manifests. All resources and links between Workloads will be resolved and provis
 			slog.Info(fmt.Sprintf("Wrote %d manifests to manifests buffer for workload '%s'", len(manifests), workloadName))
 		}
 
+		// Add namespace to manifests if specified
+		if namespace != "" {
+			for _, manifest := range outputManifests {
+				// Skip namespace resources
+				if kind, ok := manifest["kind"].(string); ok && kind == "Namespace" {
+					continue
+				}
+				
+				// Add namespace to metadata
+				if metadata, ok := manifest["metadata"].(map[string]interface{}); ok {
+					metadata["namespace"] = namespace
+				}
+			}
+
+			// Generate namespace manifest if requested
+			if generateNamespace {
+				namespaceManifest := map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Namespace",
+					"metadata": map[string]interface{}{
+						"name": namespace,
+						"labels": map[string]interface{}{
+							"app.kubernetes.io/managed-by": "score-k8s",
+						},
+					},
+				}
+				// Add namespace manifest at the beginning
+				outputManifests = append([]map[string]interface{}{namespaceManifest}, outputManifests...)
+			}
+		}
+
 		// patch manifests here
 		// TODO: deprecate this!
 		if v, _ := cmd.Flags().GetStringArray(generateCmdPatchManifestsFlag); len(v) > 0 {
@@ -379,6 +425,8 @@ func init() {
 	generateCmd.Flags().StringArray(generateCmdOverridePropertyFlag, []string{}, "An optional set of path=key overrides to set or remove")
 	generateCmd.Flags().String(generateCmdImageFlag, "", "An optional container image to use for any container with image == '.'")
 	generateCmd.Flags().StringArray(generateCmdPatchManifestsFlag, []string{}, "An optional set of <kind|*>/<name|*>/path=key operations for the output manifests")
+	generateCmd.Flags().String(generateCmdNamespaceFlag, "", "An optional namespace to set for all generated resources")
+	generateCmd.Flags().Bool(generateCmdGenerateNamespaceFlag, false, "If true, generate a namespace manifest. Requires --namespace to be set")
 
 	rootCmd.AddCommand(generateCmd)
 }
