@@ -110,14 +110,14 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			}
 			return sf(ref)
 		}
-		for i, volume := range container.Volumes {
-			if mount, vol, claim, err := convertContainerVolume(i, volume, state.Resources, volSubstitutionFunction); err != nil {
-				return nil, errors.Wrapf(err, "containers.%s.volumes.%d: failed to convert", containerName, i)
+		for target, volume := range container.Volumes {
+			if mount, vol, claim, err := convertContainerVolume(target, volume, state.Resources, volSubstitutionFunction); err != nil {
+				return nil, errors.Wrapf(err, "containers.%s.volumes.%s: failed to convert", containerName, target)
 			} else {
 				containerVolumeMounts = append(containerVolumeMounts, mount)
 				if claim != nil {
 					if kind != WorkloadKindStatefulSet {
-						return nil, errors.Wrapf(err, "containers.%s.volumes.%d: volume claims can only be set on stateful sets", containerName, i)
+						return nil, errors.Wrapf(err, "containers.%s.volumes.%s: volume claims can only be set on stateful sets", containerName, target)
 					}
 					volumeClaimTemplates = append(volumeClaimTemplates, *claim)
 				} else if vol != nil {

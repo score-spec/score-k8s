@@ -16,6 +16,8 @@ package convert
 
 import (
 	"testing"
+	"fmt"
+	"crypto/sha256"
 
 	"github.com/score-spec/score-go/framework"
 	scoretypes "github.com/score-spec/score-go/types"
@@ -29,14 +31,14 @@ import (
 )
 
 func Test_convertContainerVolume_not_found(t *testing.T) {
-	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
+	_, _, _, err := convertContainerVolume("fail", scoretypes.ContainerVolume{
 		Source: "unknown",
 	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{}, noSubstitutesFunction)
 	assert.EqualError(t, err, "source: resource 'unknown' does not exist")
 }
 
 func Test_convertContainerVolume_no_outputs(t *testing.T) {
-	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
+	_, _, _, err := convertContainerVolume("fail", scoretypes.ContainerVolume{
 		Source: "volume.default#my-workload.thing",
 	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"volume.default#my-workload.thing": {
@@ -47,7 +49,7 @@ func Test_convertContainerVolume_no_outputs(t *testing.T) {
 }
 
 func Test_convertContainerVolume_empty_source(t *testing.T) {
-	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
+	_, _, _, err := convertContainerVolume("fail", scoretypes.ContainerVolume{
 		Source: "volume.default#my-workload.thing",
 	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"volume.default#my-workload.thing": {
@@ -60,7 +62,7 @@ func Test_convertContainerVolume_empty_source(t *testing.T) {
 }
 
 func Test_convertContainerVolume_bad_source(t *testing.T) {
-	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
+	_, _, _, err := convertContainerVolume("fail", scoretypes.ContainerVolume{
 		Source: "volume.default#my-workload.thing",
 	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"volume.default#my-workload.thing": {
@@ -77,7 +79,7 @@ func Test_convertContainerVolume_bad_source(t *testing.T) {
 }
 
 func Test_convertContainerVolume_bad_claim(t *testing.T) {
-	_, _, _, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
+	_, _, _, err := convertContainerVolume("fail", scoretypes.ContainerVolume{
 		Source: "volume.default#my-workload.thing",
 	}, map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
 		"volume.default#my-workload.thing": {
@@ -92,8 +94,7 @@ func Test_convertContainerVolume_bad_claim(t *testing.T) {
 }
 
 func Test_convertContainerVolume_nominal_source(t *testing.T) {
-	mount, vol, claim, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
-		Target:   "/mount/path",
+	mount, vol, claim, err := convertContainerVolume("/mount/path", scoretypes.ContainerVolume{
 		Source:   "volume.default#my-workload.thing",
 		ReadOnly: internal.Ref(true),
 		Path:     internal.Ref("sub"),
@@ -109,14 +110,14 @@ func Test_convertContainerVolume_nominal_source(t *testing.T) {
 		},
 	}, noSubstitutesFunction)
 	assert.Equal(t, coreV1.VolumeMount{
-		Name:      "vol-0",
+		Name:      fmt.Sprintf("vol-%x", sha256.Sum256([]byte("/mount/path"))),
 		ReadOnly:  true,
 		MountPath: "/mount/path",
 		SubPath:   "sub",
 	}, mount)
 	if assert.NotNil(t, vol) {
 		assert.Equal(t, coreV1.Volume{
-			Name: "vol-0",
+			Name: fmt.Sprintf("vol-%x", sha256.Sum256([]byte("/mount/path"))),
 			VolumeSource: coreV1.VolumeSource{
 				EmptyDir: &coreV1.EmptyDirVolumeSource{
 					SizeLimit: internal.Ref(resource.MustParse("10Mi")),
@@ -129,8 +130,7 @@ func Test_convertContainerVolume_nominal_source(t *testing.T) {
 }
 
 func Test_convertContainerVolume_nominal_claim(t *testing.T) {
-	mount, vol, claim, err := convertContainerVolume(0, scoretypes.ContainerVolumesElem{
-		Target:   "/mount/path",
+	mount, vol, claim, err := convertContainerVolume("/mount/path", scoretypes.ContainerVolume{
 		Source:   "volume.default#my-workload.thing",
 		ReadOnly: internal.Ref(true),
 		Path:     internal.Ref("sub"),
@@ -144,7 +144,7 @@ func Test_convertContainerVolume_nominal_claim(t *testing.T) {
 		},
 	}, noSubstitutesFunction)
 	assert.Equal(t, coreV1.VolumeMount{
-		Name:      "vol-0",
+		Name:      fmt.Sprintf("vol-%x", sha256.Sum256([]byte("/mount/path"))),
 		ReadOnly:  true,
 		MountPath: "/mount/path",
 		SubPath:   "sub",
@@ -153,7 +153,7 @@ func Test_convertContainerVolume_nominal_claim(t *testing.T) {
 	if assert.NotNil(t, claim) {
 		assert.Equal(t, coreV1.PersistentVolumeClaim{
 			ObjectMeta: v1.ObjectMeta{
-				Name: "vol-0",
+				Name: fmt.Sprintf("vol-%x", sha256.Sum256([]byte("/mount/path"))),
 			},
 			Spec: coreV1.PersistentVolumeClaimSpec{
 				StorageClassName: internal.Ref("default"),

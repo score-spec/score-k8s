@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"crypto/sha256"
 	"unicode/utf8"
 
 	"github.com/pkg/errors"
@@ -36,7 +37,7 @@ func convertContainerFile(
 	manifestPrefix string, scoreSpecPath *string, substitutionFunc func(string) (string, error),
 ) (coreV1.VolumeMount, *coreV1.ConfigMap, *coreV1.Volume, error) {
 	mount := coreV1.VolumeMount{
-		Name:      fmt.Sprintf("file-%s", target),
+		Name:      fmt.Sprintf("file-%x", sha256.Sum256([]byte(target))),
 		ReadOnly:  false,
 		MountPath: filepath.Dir(target),
 	}
@@ -109,7 +110,7 @@ func convertContainerFile(
 		content = []byte(stringContent)
 	}
 
-	configMapName := fmt.Sprintf("%sfile-%s", manifestPrefix, target)
+	configMapName := fmt.Sprintf("%sfile-%x", manifestPrefix, sha256.Sum256([]byte(target)))
 	return mount,
 		&coreV1.ConfigMap{
 			TypeMeta: machineryMeta.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
