@@ -250,13 +250,13 @@ spec:
           - configMap:
               items:
               - key: file
-                path: binary
-              name: example-c1-file-d0e9aff012
-		  - configMap:
-              items:
-              - key: file
                 path: root.md
               name: example-c1-file-7a1ae64977
+          - configMap:
+              items:
+              - key: file
+                path: binary
+              name: example-c1-file-d0e9aff012
 status: {}
 ---
 `, out.String())
