@@ -52,13 +52,11 @@ func TestMassive(t *testing.T) {
 					"VAR4": "${metadata.thing}",
 					"VAR5": "${resources.foo.key}",
 				},
-				Files: []scoretypes.ContainerFilesElem{
-					{
-						Target:  "/root.md",
+				Files: map[string]scoretypes.ContainerFile{
+					"/root.md": {
 						Content: internal.Ref("my-content ${metadata.name}"),
 					},
-					{
-						Target:        "/binary",
+					"/binary": {
 						BinaryContent: internal.Ref(base64.StdEncoding.EncodeToString([]byte("hello ${metadata.name} world"))),
 					},
 				},
@@ -74,9 +72,8 @@ func TestMassive(t *testing.T) {
 					Requests: &scoretypes.ResourcesLimits{Cpu: internal.Ref("999m")},
 					Limits:   &scoretypes.ResourcesLimits{Memory: internal.Ref("10Mi")},
 				},
-				Volumes: []scoretypes.ContainerVolumesElem{
-					{
-						Target: "/mount/thing",
+				Volumes: map[string]scoretypes.ContainerVolume{
+					"/mount/thing": {
 						Source: "${resources.vol}",
 					},
 				},
@@ -142,7 +139,7 @@ binaryData:
 kind: ConfigMap
 metadata:
   creationTimestamp: null
-  name: example-c1-file-0
+  name: example-c1-file-7a1ae64977
 ---
 apiVersion: v1
 binaryData:
@@ -150,7 +147,7 @@ binaryData:
 kind: ConfigMap
 metadata:
   creationTimestamp: null
-  name: example-c1-file-1
+  name: example-c1-file-d0e9aff012
 ---
 apiVersion: v1
 kind: Service
@@ -237,7 +234,7 @@ spec:
             cpu: 999m
         volumeMounts:
         - mountPath: /mount/thing
-          name: vol-0
+          name: vol-5e3859fe72
         - mountPath: /
           name: proj-vol-0
           readOnly: true
@@ -246,7 +243,7 @@ spec:
         resources: {}
       volumes:
       - emptyDir: {}
-        name: vol-0
+        name: vol-5e3859fe72
       - name: proj-vol-0
         projected:
           sources:
@@ -254,12 +251,12 @@ spec:
               items:
               - key: file
                 path: root.md
-              name: example-c1-file-0
+              name: example-c1-file-7a1ae64977
           - configMap:
               items:
               - key: file
                 path: binary
-              name: example-c1-file-1
+              name: example-c1-file-d0e9aff012
 status: {}
 ---
 `, out.String())

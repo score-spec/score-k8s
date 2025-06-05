@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"crypto/sha256"
 	"unicode/utf8"
 
 	"github.com/pkg/errors"
@@ -32,35 +33,36 @@ import (
 )
 
 func convertContainerFile(
-	index int, fileElem scoretypes.ContainerFilesElem,
+    target string, file scoretypes.ContainerFile,
 	manifestPrefix string, scoreSpecPath *string, substitutionFunc func(string) (string, error),
 ) (coreV1.VolumeMount, *coreV1.ConfigMap, *coreV1.Volume, error) {
+	targetHash := sha256.Sum256([]byte(target))
 	mount := coreV1.VolumeMount{
-		Name:      fmt.Sprintf("file-%d", index),
+		Name:      fmt.Sprintf("file-%x", targetHash[:5]),
 		ReadOnly:  false,
-		MountPath: filepath.Dir(fileElem.Target),
+		MountPath: filepath.Dir(target),
 	}
 
 	var mountMode *int32
-	if fileElem.Mode != nil {
-		df, err := strconv.ParseInt(*fileElem.Mode, 8, 32)
+	if file.Mode != nil {
+		df, err := strconv.ParseInt(*file.Mode, 8, 32)
 		if err != nil {
-			return mount, nil, nil, errors.Wrapf(err, "mode: failed to parse '%s'", *fileElem.Mode)
+			return mount, nil, nil, errors.Wrapf(err, "mode: failed to parse '%s'", *file.Mode)
 		}
 		mountMode = internal.Ref(int32(df))
 	}
 
 	var content []byte
 	var err error
-	if fileElem.Content != nil {
-		content = []byte(*fileElem.Content)
-	} else if fileElem.BinaryContent != nil {
-		content, err = base64.StdEncoding.DecodeString(*fileElem.BinaryContent)
+	if file.Content != nil {
+		content = []byte(*file.Content)
+	} else if file.BinaryContent != nil {
+		content, err = base64.StdEncoding.DecodeString(*file.BinaryContent)
 		if err != nil {
 			return mount, nil, nil, fmt.Errorf("binaryContent: failed to decode base64: %w", err)
 		}
-	} else if fileElem.Source != nil {
-		sourcePath := *fileElem.Source
+	} else if file.Source != nil {
+		sourcePath := *file.Source
 		if !filepath.IsAbs(sourcePath) && scoreSpecPath != nil {
 			sourcePath = filepath.Join(filepath.Dir(*scoreSpecPath), sourcePath)
 		}
@@ -72,7 +74,7 @@ func convertContainerFile(
 		return mount, nil, nil, errors.New("missing 'content' or 'source'")
 	}
 
-	if (fileElem.NoExpand == nil || !*fileElem.NoExpand) && fileElem.BinaryContent == nil {
+	if (file.NoExpand == nil || !*file.NoExpand) && file.BinaryContent == nil {
 		if !utf8.Valid(content) {
 			return mount, nil, nil, errors.New("source content contains non-utf8 bytes; set noExpand=true or use binaryContent")
 		}
@@ -96,7 +98,7 @@ func convertContainerFile(
 							SecretName: refs[0].Name,
 							Items: []coreV1.KeyToPath{{
 								Key:  refs[0].Key,
-								Path: filepath.Base(fileElem.Target),
+								Path: filepath.Base(target),
 								Mode: mountMode}},
 						},
 					},
@@ -109,7 +111,7 @@ func convertContainerFile(
 		content = []byte(stringContent)
 	}
 
-	configMapName := fmt.Sprintf("%sfile-%d", manifestPrefix, index)
+	configMapName := fmt.Sprintf("%sfile-%x", manifestPrefix, targetHash[:5])
 	return mount,
 		&coreV1.ConfigMap{
 			TypeMeta: machineryMeta.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
@@ -123,7 +125,7 @@ func convertContainerFile(
 				ConfigMap: &coreV1.ConfigMapVolumeSource{
 					Items: []coreV1.KeyToPath{{
 						Key:  "file",
-						Path: filepath.Base(fileElem.Target),
+						Path: filepath.Base(target),
 						Mode: mountMode,
 					}},
 					LocalObjectReference: coreV1.LocalObjectReference{Name: configMapName},
