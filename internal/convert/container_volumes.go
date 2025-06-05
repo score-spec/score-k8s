@@ -36,7 +36,8 @@ func convertContainerVolume(
 	resources map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras],
 	substitutionFunc func(string) (string, error),
 ) (coreV1.VolumeMount, *coreV1.Volume, *coreV1.PersistentVolumeClaim, error) {
-	volName := fmt.Sprintf("vol-%x", sha256.Sum256([]byte(target)))
+	targetHash := sha256.Sum256([]byte(target))
+	volName := fmt.Sprintf("vol-%x", targetHash[:5])
 	mount := coreV1.VolumeMount{
 		Name:      volName,
 		MountPath: target,

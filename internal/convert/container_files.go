@@ -36,8 +36,9 @@ func convertContainerFile(
     target string, file scoretypes.ContainerFile,
 	manifestPrefix string, scoreSpecPath *string, substitutionFunc func(string) (string, error),
 ) (coreV1.VolumeMount, *coreV1.ConfigMap, *coreV1.Volume, error) {
+	targetHash := sha256.Sum256([]byte(target))
 	mount := coreV1.VolumeMount{
-		Name:      fmt.Sprintf("file-%x", sha256.Sum256([]byte(target))),
+		Name:      fmt.Sprintf("file-%x", targetHash[:5]),
 		ReadOnly:  false,
 		MountPath: filepath.Dir(target),
 	}
@@ -110,7 +111,7 @@ func convertContainerFile(
 		content = []byte(stringContent)
 	}
 
-	configMapName := fmt.Sprintf("%sfile-%x", manifestPrefix, sha256.Sum256([]byte(target)))
+	configMapName := fmt.Sprintf("%sfile-%x", manifestPrefix, targetHash[:5])
 	return mount,
 		&coreV1.ConfigMap{
 			TypeMeta: machineryMeta.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},

@@ -16,8 +16,6 @@ package convert
 
 import (
 	"testing"
-	"fmt"
-	"crypto/sha256"
 
 	scoretypes "github.com/score-spec/score-go/types"
 	"github.com/stretchr/testify/assert"
@@ -53,13 +51,13 @@ func Test_convertContainerFile_content_no_expand(t *testing.T) {
 		NoExpand: internal.Ref(true),
 	}, "my-workload-c1-", nil, nil)
 	assert.Equal(t, coreV1.VolumeMount{
-		Name:      fmt.Sprintf("file-%x", sha256.Sum256([]byte("/some/mount"))),
+		Name:      "file-53b1563f1b",
 		MountPath: "/some",
 	}, mount)
 	if assert.NotNil(t, cfg) {
 		assert.Equal(t, coreV1.ConfigMap{
 			TypeMeta:   v1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-			ObjectMeta: v1.ObjectMeta{Name: fmt.Sprintf("my-workload-c1-file-%x", sha256.Sum256([]byte("/some/mount")))},
+			ObjectMeta: v1.ObjectMeta{Name: "my-workload-c1-file-53b1563f1b"},
 			BinaryData: map[string][]byte{
 				"file": []byte("raw content with ${some.ref}"),
 			},
@@ -67,10 +65,10 @@ func Test_convertContainerFile_content_no_expand(t *testing.T) {
 	}
 	if assert.NotNil(t, vol) {
 		assert.Equal(t, coreV1.Volume{
-			Name: fmt.Sprintf("file-%x", sha256.Sum256([]byte("/some/mount"))),
+			Name: "file-53b1563f1b",
 			VolumeSource: coreV1.VolumeSource{
 				ConfigMap: &coreV1.ConfigMapVolumeSource{
-					LocalObjectReference: coreV1.LocalObjectReference{Name: fmt.Sprintf("my-workload-c1-file-%x", sha256.Sum256([]byte("/some/mount")))},
+					LocalObjectReference: coreV1.LocalObjectReference{Name: "my-workload-c1-file-53b1563f1b"},
 					Items: []coreV1.KeyToPath{
 						{Key: "file", Path: "mount"},
 					},
@@ -97,13 +95,13 @@ func Test_convertContainerFile_content_expand_with_secret(t *testing.T) {
 		return internal.EncodeSecretReference("default", "key"), nil
 	})
 	assert.Equal(t, coreV1.VolumeMount{
-		Name:      fmt.Sprintf("file-%x", sha256.Sum256([]byte("/some/mount"))),
+		Name:      "file-53b1563f1b",
 		MountPath: "/some",
 	}, mount)
 	assert.Nil(t, cfg)
 	if assert.NotNil(t, vol) {
 		assert.Equal(t, coreV1.Volume{
-			Name: fmt.Sprintf("file-%x", sha256.Sum256([]byte("/some/mount"))),
+			Name: "file-53b1563f1b",
 			VolumeSource: coreV1.VolumeSource{
 				Secret: &coreV1.SecretVolumeSource{
 					SecretName: "default",

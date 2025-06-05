@@ -16,8 +16,6 @@ package convert
 
 import (
 	"testing"
-	"fmt"
-	"crypto/sha256"
 
 	"github.com/score-spec/score-go/framework"
 	scoretypes "github.com/score-spec/score-go/types"
@@ -110,14 +108,14 @@ func Test_convertContainerVolume_nominal_source(t *testing.T) {
 		},
 	}, noSubstitutesFunction)
 	assert.Equal(t, coreV1.VolumeMount{
-		Name:      fmt.Sprintf("vol-%x", sha256.Sum256([]byte("/mount/path"))),
+		Name:      "vol-274e5357eb",
 		ReadOnly:  true,
 		MountPath: "/mount/path",
 		SubPath:   "sub",
 	}, mount)
 	if assert.NotNil(t, vol) {
 		assert.Equal(t, coreV1.Volume{
-			Name: fmt.Sprintf("vol-%x", sha256.Sum256([]byte("/mount/path"))),
+			Name: "vol-274e5357eb",
 			VolumeSource: coreV1.VolumeSource{
 				EmptyDir: &coreV1.EmptyDirVolumeSource{
 					SizeLimit: internal.Ref(resource.MustParse("10Mi")),
@@ -144,7 +142,7 @@ func Test_convertContainerVolume_nominal_claim(t *testing.T) {
 		},
 	}, noSubstitutesFunction)
 	assert.Equal(t, coreV1.VolumeMount{
-		Name:      fmt.Sprintf("vol-%x", sha256.Sum256([]byte("/mount/path"))),
+		Name:      "vol-274e5357eb",
 		ReadOnly:  true,
 		MountPath: "/mount/path",
 		SubPath:   "sub",
@@ -153,7 +151,7 @@ func Test_convertContainerVolume_nominal_claim(t *testing.T) {
 	if assert.NotNil(t, claim) {
 		assert.Equal(t, coreV1.PersistentVolumeClaim{
 			ObjectMeta: v1.ObjectMeta{
-				Name: fmt.Sprintf("vol-%x", sha256.Sum256([]byte("/mount/path"))),
+				Name: "vol-274e5357eb",
 			},
 			Spec: coreV1.PersistentVolumeClaimSpec{
 				StorageClassName: internal.Ref("default"),

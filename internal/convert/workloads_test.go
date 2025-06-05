@@ -139,7 +139,7 @@ binaryData:
 kind: ConfigMap
 metadata:
   creationTimestamp: null
-  name: example-c1-file-7a1ae64977158f622a4c4baa2c4320928b10dd1a2845d20bfdd7db93c9aee280
+  name: example-c1-file-7a1ae64977
 ---
 apiVersion: v1
 binaryData:
@@ -147,7 +147,7 @@ binaryData:
 kind: ConfigMap
 metadata:
   creationTimestamp: null
-  name: example-c1-file-d0e9aff012c4f61ee3d9da197855232429f91c126d11754dff92bf72df160ce6
+  name: example-c1-file-d0e9aff012
 ---
 apiVersion: v1
 kind: Service
@@ -234,7 +234,7 @@ spec:
             cpu: 999m
         volumeMounts:
         - mountPath: /mount/thing
-          name: vol-5e3859fe72cf4264d165fd48df8e32dd0ad0563931e0de7544cff79bda5a9490
+          name: vol-5e3859fe72
         - mountPath: /
           name: proj-vol-0
           readOnly: true
@@ -243,20 +243,20 @@ spec:
         resources: {}
       volumes:
       - emptyDir: {}
-        name: vol-5e3859fe72cf4264d165fd48df8e32dd0ad0563931e0de7544cff79bda5a9490
+        name: vol-5e3859fe72
       - name: proj-vol-0
         projected:
           sources:
           - configMap:
               items:
               - key: file
-                path: root.md
-              name: example-c1-file-7a1ae64977158f622a4c4baa2c4320928b10dd1a2845d20bfdd7db93c9aee280
-          - configMap:
+                path: binary
+              name: example-c1-file-d0e9aff012
+		  - configMap:
               items:
               - key: file
-                path: binary
-              name: example-c1-file-d0e9aff012c4f61ee3d9da197855232429f91c126d11754dff92bf72df160ce6
+                path: root.md
+              name: example-c1-file-7a1ae64977
 status: {}
 ---
 `, out.String())
