@@ -1,3 +1,4 @@
 .score-k8s
 manifests.yaml
 score.yaml
+score-k8s
