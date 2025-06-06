@@ -150,6 +150,12 @@ Examples:
   # Patch resulting manifests
   score-k8s generate score.yaml --patch-manifests */*/metadata.annotations.key=value --patch-manifests Deployment/foo/spec.replicas=4
 
+  # Set namespace for all resources
+  score-k8s generate score.yaml --namespace=test-ns
+
+  # Generate namespace manifest and set namespace for all resources
+  score-k8s generate score.yaml --namespace=test-ns --generate-namespace
+
 Flags:
   -h, --help                            help for generate
       --image string                    An optional container image to use for any container with image == '.'
@@ -157,6 +163,8 @@ Flags:
       --override-property stringArray   An optional set of path=key overrides to set or remove
       --overrides-file string           An optional file of Score overrides to merge in
       --patch-manifests stringArray     An optional set of <kind|*>/<name|*>/path=key operations for the output manifests
+      --namespace string               An optional namespace to set for all generated resources
+      --generate-namespace              If true, generate a namespace manifest (requires --namespace to be set)
 ```
 
 ### Shell Completions
@@ -242,7 +250,22 @@ Other resources can be found at:
 
 ### Which namespace will manifests be deployed into?
 
-Right now, no namespace is specified in the generated manifests so they will obey any `--namespace` passed to the `kubctl apply` command. All secret references are assumed to be in the same namespace as the workloads.
+By default, no namespace is specified in the generated manifests, so they will obey any `--namespace` passed to the `kubectl apply` command. All secret references are assumed to be in the same namespace as the workloads.
+
+However, you can explicitly manage namespaces using two flags in the `score-k8s generate` command:
+
+1. `--namespace`: Sets the namespace for all generated resources. When this flag is used, all resources in the generated manifests will have their `metadata.namespace` field set to the specified value.
+
+2. `--generate-namespace`: When used with `--namespace`, this flag will generate a Namespace manifest at the beginning of the output file. The namespace manifest will include appropriate labels (`app.kubernetes.io/managed-by: score-k8s`).
+
+Example usage:
+```bash
+# Set namespace for all resources
+score-k8s generate score.yaml --namespace=test-ns
+
+# Generate namespace manifest and set namespace for all resources
+score-k8s generate score.yaml --namespace=test-ns --generate-namespace
+```
 
 ### How do I modify the generated manifests or add and remove from them?
 
