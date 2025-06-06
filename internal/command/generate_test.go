@@ -98,6 +98,21 @@ metadata:
 containers:
   main:
     image: nginx:latest`), 0644))
+}
+
+func TestGenerateWithNamespaceFlag(t *testing.T) {
+	td := changeToTempDir(t)
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+	assert.Equal(t, "", stdout)
+
+	// Create a basic score file
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: nginx:latest`), 0644))
 
 	// Test with namespace flag
 	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
@@ -115,6 +130,21 @@ containers:
 	assert.Contains(t, string(manifests), "namespace: test-ns")
 	// Check that no namespace resource is created
 	assert.NotContains(t, string(manifests), "kind: Namespace")
+}
+
+func TestGenerateWithGenerateNamespaceFlag(t *testing.T) {
+	td := changeToTempDir(t)
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+	assert.Equal(t, "", stdout)
+
+	// Create a basic score file
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: nginx:latest`), 0644))
 
 	// Test with generate-namespace flag without namespace
 	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
@@ -124,6 +154,21 @@ containers:
 	})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "--generate-namespace was used but --namespace was not provided")
+}
+
+func TestGenerateWithNamespaceAndGenerateNamespaceFlags(t *testing.T) {
+	td := changeToTempDir(t)
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+	assert.Equal(t, "", stdout)
+
+	// Create a basic score file
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: nginx:latest`), 0644))
 
 	// Test with both namespace and generate-namespace flags
 	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
@@ -135,7 +180,7 @@ containers:
 	require.NoError(t, err)
 
 	// Read and parse the generated manifests
-	manifests, err = os.ReadFile("manifests.yaml")
+	manifests, err := os.ReadFile("manifests.yaml")
 	require.NoError(t, err)
 
 	// Check that namespace resource is created

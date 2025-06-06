@@ -248,9 +248,11 @@ Other resources can be found at:
 2. Or, use a [Kustomize](https://kustomize.io/) patch to override the number of replicas with `kubectl apply -k`.
 3. Or, use a `--patch-templates` template to set the `spec.replicas` in the relevant workloads (see further below).
 
-### Managing Namespaces
+### Which namespace will manifests be deployed into?
 
-The `score-k8s generate` command provides two flags for namespace management:
+By default, no namespace is specified in the generated manifests, so they will obey any `--namespace` passed to the `kubectl apply` command. All secret references are assumed to be in the same namespace as the workloads.
+
+However, you can explicitly manage namespaces using two flags in the `score-k8s generate` command:
 
 1. `--namespace`: Sets the namespace for all generated resources. When this flag is used, all resources in the generated manifests will have their `metadata.namespace` field set to the specified value.
 
@@ -264,10 +266,6 @@ score-k8s generate score.yaml --namespace=test-ns
 # Generate namespace manifest and set namespace for all resources
 score-k8s generate score.yaml --namespace=test-ns --generate-namespace
 ```
-
-### Which namespace will manifests be deployed into?
-
-Right now, no namespace is specified in the generated manifests so they will obey any `--namespace` passed to the `kubctl apply` command. All secret references are assumed to be in the same namespace as the workloads.
 
 ### How do I modify the generated manifests or add and remove from them?
 
