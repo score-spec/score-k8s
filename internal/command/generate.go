@@ -43,12 +43,12 @@ import (
 )
 
 const (
-	generateCmdOverridesFileFlag    = "overrides-file"
-	generateCmdOverridePropertyFlag = "override-property"
-	generateCmdImageFlag            = "image"
-	generateCmdOutputFlag           = "output"
-	generateCmdPatchManifestsFlag   = "patch-manifests"
-	generateCmdNamespaceFlag        = "namespace"
+	generateCmdOverridesFileFlag     = "overrides-file"
+	generateCmdOverridePropertyFlag  = "override-property"
+	generateCmdImageFlag             = "image"
+	generateCmdOutputFlag            = "output"
+	generateCmdPatchManifestsFlag    = "patch-manifests"
+	generateCmdNamespaceFlag         = "namespace"
 	generateCmdGenerateNamespaceFlag = "generate-namespace"
 )
 
@@ -90,7 +90,7 @@ manifests. All resources and links between Workloads will be resolved and provis
 		generateNamespace, _ := cmd.Flags().GetBool(generateCmdGenerateNamespaceFlag)
 		namespace, _ := cmd.Flags().GetString(generateCmdNamespaceFlag)
 		if generateNamespace && namespace == "" {
-			return fmt.Errorf("--generate-namespace was used but --namespace was not provided")
+			return fmt.Errorf("--namespace flag is required when using --generate-namespace")
 		}
 
 		sd, ok, err := project.LoadStateDirectory(".")
@@ -261,7 +261,7 @@ manifests. All resources and links between Workloads will be resolved and provis
 				if kind, ok := manifest["kind"].(string); ok && kind == "Namespace" {
 					continue
 				}
-				
+
 				// Add namespace to metadata
 				if metadata, ok := manifest["metadata"].(map[string]interface{}); ok {
 					metadata["namespace"] = namespace
@@ -270,7 +270,7 @@ manifests. All resources and links between Workloads will be resolved and provis
 
 			// Generate namespace manifest if requested
 			if generateNamespace {
-				namespaceManifest := map[string]interface{}{
+				outputManifests = append([]map[string]interface{}{{
 					"apiVersion": "v1",
 					"kind":       "Namespace",
 					"metadata": map[string]interface{}{
@@ -279,9 +279,7 @@ manifests. All resources and links between Workloads will be resolved and provis
 							"app.kubernetes.io/managed-by": "score-k8s",
 						},
 					},
-				}
-				// Add namespace manifest at the beginning
-				outputManifests = append([]map[string]interface{}{namespaceManifest}, outputManifests...)
+				}}, outputManifests...)
 			}
 		}
 

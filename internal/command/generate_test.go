@@ -153,7 +153,7 @@ containers:
 		"--", "score.yaml",
 	})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "--generate-namespace was used but --namespace was not provided")
+	assert.Contains(t, err.Error(), "namespace flag is required when using --generate-namespace")
 }
 
 func TestGenerateWithNamespaceAndGenerateNamespaceFlags(t *testing.T) {
