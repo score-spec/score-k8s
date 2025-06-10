@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"crypto/sha256"
 
 	"github.com/pkg/errors"
 	"github.com/score-spec/score-go/framework"
@@ -31,14 +32,15 @@ import (
 )
 
 func convertContainerVolume(
-	index int, volume scoretypes.ContainerVolumesElem,
+	target string, volume scoretypes.ContainerVolume,
 	resources map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras],
 	substitutionFunc func(string) (string, error),
 ) (coreV1.VolumeMount, *coreV1.Volume, *coreV1.PersistentVolumeClaim, error) {
-	volName := fmt.Sprintf("vol-%d", index)
+	targetHash := sha256.Sum256([]byte(target))
+	volName := fmt.Sprintf("vol-%x", targetHash[:5])
 	mount := coreV1.VolumeMount{
 		Name:      volName,
-		MountPath: volume.Target,
+		MountPath: target,
 		SubPath:   internal.DerefOr(volume.Path, ""),
 		ReadOnly:  internal.DerefOr(volume.ReadOnly, false),
 	}

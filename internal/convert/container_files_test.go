@@ -26,39 +26,38 @@ import (
 )
 
 func Test_convertContainerFile_invalid_mode(t *testing.T) {
-	_, _, _, err := convertContainerFile(0, scoretypes.ContainerFilesElem{Mode: internal.Ref("xxx")}, "", nil, nil)
+	_, _, _, err := convertContainerFile("fail", scoretypes.ContainerFile{Mode: internal.Ref("xxx")}, "", nil, nil)
 	assert.EqualError(t, err, "mode: failed to parse 'xxx': strconv.ParseInt: parsing \"xxx\": invalid syntax")
 }
 
 func Test_convertContainerFile_no_content(t *testing.T) {
-	_, _, _, err := convertContainerFile(0, scoretypes.ContainerFilesElem{}, "", nil, nil)
+	_, _, _, err := convertContainerFile("fail", scoretypes.ContainerFile{}, "", nil, nil)
 	assert.EqualError(t, err, "missing 'content' or 'source'")
 }
 
 func Test_convertContainerFile_unreadable_source(t *testing.T) {
-	_, _, _, err := convertContainerFile(0, scoretypes.ContainerFilesElem{Source: internal.Ref("file.that.does.not.exist")}, "", nil, nil)
+	_, _, _, err := convertContainerFile("fail", scoretypes.ContainerFile{Source: internal.Ref("file.that.does.not.exist")}, "", nil, nil)
 	assert.EqualError(t, err, "source: failed to read file 'file.that.does.not.exist': open file.that.does.not.exist: no such file or directory")
 }
 
 func Test_convertContainerFile_unreadable_source_relative(t *testing.T) {
-	_, _, _, err := convertContainerFile(0, scoretypes.ContainerFilesElem{Source: internal.Ref("file.that.does.not.exist")}, "", internal.Ref("my/file.yaml"), nil)
+	_, _, _, err := convertContainerFile("fail", scoretypes.ContainerFile{Source: internal.Ref("file.that.does.not.exist")}, "", internal.Ref("my/file.yaml"), nil)
 	assert.EqualError(t, err, "source: failed to read file 'my/file.that.does.not.exist': open my/file.that.does.not.exist: no such file or directory")
 }
 
 func Test_convertContainerFile_content_no_expand(t *testing.T) {
-	mount, cfg, vol, err := convertContainerFile(0, scoretypes.ContainerFilesElem{
+	mount, cfg, vol, err := convertContainerFile("/some/mount", scoretypes.ContainerFile{
 		Content:  internal.Ref("raw content with ${some.ref}"),
-		Target:   "/some/mount",
 		NoExpand: internal.Ref(true),
 	}, "my-workload-c1-", nil, nil)
 	assert.Equal(t, coreV1.VolumeMount{
-		Name:      "file-0",
+		Name:      "file-53b1563f1b",
 		MountPath: "/some",
 	}, mount)
 	if assert.NotNil(t, cfg) {
 		assert.Equal(t, coreV1.ConfigMap{
 			TypeMeta:   v1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-			ObjectMeta: v1.ObjectMeta{Name: "my-workload-c1-file-0"},
+			ObjectMeta: v1.ObjectMeta{Name: "my-workload-c1-file-53b1563f1b"},
 			BinaryData: map[string][]byte{
 				"file": []byte("raw content with ${some.ref}"),
 			},
@@ -66,10 +65,10 @@ func Test_convertContainerFile_content_no_expand(t *testing.T) {
 	}
 	if assert.NotNil(t, vol) {
 		assert.Equal(t, coreV1.Volume{
-			Name: "file-0",
+			Name: "file-53b1563f1b",
 			VolumeSource: coreV1.VolumeSource{
 				ConfigMap: &coreV1.ConfigMapVolumeSource{
-					LocalObjectReference: coreV1.LocalObjectReference{Name: "my-workload-c1-file-0"},
+					LocalObjectReference: coreV1.LocalObjectReference{Name: "my-workload-c1-file-53b1563f1b"},
 					Items: []coreV1.KeyToPath{
 						{Key: "file", Path: "mount"},
 					},
@@ -81,9 +80,8 @@ func Test_convertContainerFile_content_no_expand(t *testing.T) {
 }
 
 func Test_convertContainerFile_content_expand_mixed(t *testing.T) {
-	_, _, _, err := convertContainerFile(0, scoretypes.ContainerFilesElem{
+	_, _, _, err := convertContainerFile("/some/mount", scoretypes.ContainerFile{
 		Content: internal.Ref("raw content with ${some.ref}"),
-		Target:  "/some/mount",
 	}, "my-workload-c1-", nil, func(s string) (string, error) {
 		return internal.EncodeSecretReference("default", "key"), nil
 	})
@@ -91,20 +89,19 @@ func Test_convertContainerFile_content_expand_mixed(t *testing.T) {
 }
 
 func Test_convertContainerFile_content_expand_with_secret(t *testing.T) {
-	mount, cfg, vol, err := convertContainerFile(0, scoretypes.ContainerFilesElem{
+	mount, cfg, vol, err := convertContainerFile("/some/mount", scoretypes.ContainerFile{
 		Content: internal.Ref("${some.ref}"),
-		Target:  "/some/mount",
 	}, "my-workload-c1-", nil, func(s string) (string, error) {
 		return internal.EncodeSecretReference("default", "key"), nil
 	})
 	assert.Equal(t, coreV1.VolumeMount{
-		Name:      "file-0",
+		Name:      "file-53b1563f1b",
 		MountPath: "/some",
 	}, mount)
 	assert.Nil(t, cfg)
 	if assert.NotNil(t, vol) {
 		assert.Equal(t, coreV1.Volume{
-			Name: "file-0",
+			Name: "file-53b1563f1b",
 			VolumeSource: coreV1.VolumeSource{
 				Secret: &coreV1.SecretVolumeSource{
 					SecretName: "default",
