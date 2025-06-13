@@ -56,7 +56,7 @@ func TestPatchServices(t *testing.T) {
 - op: delete
   path: {{ $i }}.spec.template.spec.containers.0.name
 {{ end }}
-`,
+`, "",
 	)
 	require.NoError(t, err)
 	assert.Equal(t, []map[string]interface{}{
@@ -110,7 +110,81 @@ func TestPatchServices_can_delete_manifest(t *testing.T) {
   path: {{ $i }}
 {{ end }}
 `,
+		"",
 	)
 	require.NoError(t, err)
 	assert.Equal(t, []map[string]interface{}{}, output)
+}
+
+func TestPatchServices_with_empty_namespace(t *testing.T) {
+	output, err := PatchServices(
+		new(project.State),
+		[]map[string]interface{}{},
+		`
+- op: set
+  path: -1
+  value:
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: test-cm
+      {{ if ne .Namespace "" }}
+      namespace: {{ .Namespace }}
+      {{ end }}
+    data:
+      player_initial_lives: "3"
+  description: Create a new ConfigMap
+`,
+		"",
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []map[string]interface{}{
+		{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]interface{}{
+				"name": "test-cm",
+			},
+			"data": map[string]interface{}{
+				"player_initial_lives": "3",
+			},
+		},
+	}, output)
+}
+
+func TestPatchServices_with_non_empty_namespace(t *testing.T) {
+	output, err := PatchServices(
+		new(project.State),
+		[]map[string]interface{}{},
+		`
+- op: set
+  path: -1
+  value:
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: test-cm
+      {{ if ne .Namespace "" }}
+      namespace: {{ .Namespace }}
+      {{ end }}
+    data:
+      player_initial_lives: "3"
+  description: Create a new ConfigMap with namespace
+`,
+		"test-namespace",
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []map[string]interface{}{
+		{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]interface{}{
+				"name":      "test-cm",
+				"namespace": "test-namespace",
+			},
+			"data": map[string]interface{}{
+				"player_initial_lives": "3",
+			},
+		},
+	}, output)
 }
