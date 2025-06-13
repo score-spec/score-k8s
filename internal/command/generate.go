@@ -296,7 +296,7 @@ manifests. All resources and links between Workloads will be resolved and provis
 
 		for i, content := range state.Extras.PatchingTemplates {
 			slog.Info(fmt.Sprintf("Applying patching template %d", i+1))
-			outputManifests, err = patching.PatchServices(state, outputManifests, content)
+			outputManifests, err = patching.PatchServices(state, outputManifests, content, namespace)
 			if err != nil {
 				return fmt.Errorf("failed to patch template %d: %w", i+1, err)
 			}

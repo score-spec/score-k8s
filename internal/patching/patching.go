@@ -53,6 +53,7 @@ func yamlRoundTrip[k any, v any](input *k) (*v, error) {
 type patchTemplateInput struct {
 	Manifests []map[string]interface{}
 	Workloads map[string]interface{}
+	Namespace string
 }
 
 func ValidatePatchTemplate(content string) error {
@@ -62,7 +63,7 @@ func ValidatePatchTemplate(content string) error {
 	return nil
 }
 
-func PatchServices(state *project.State, manifests []map[string]interface{}, rawTemplate string) ([]map[string]interface{}, error) {
+func PatchServices(state *project.State, manifests []map[string]interface{}, rawTemplate string, namespace string) ([]map[string]interface{}, error) {
 	tmpl, err := template.New("").Funcs(sprig.FuncMap()).Parse(rawTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template: %w", err)
@@ -79,6 +80,7 @@ func PatchServices(state *project.State, manifests []map[string]interface{}, raw
 	if err := tmpl.Execute(buff, patchTemplateInput{
 		Workloads: *workloadInputs,
 		Manifests: manifests,
+		Namespace: namespace,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to execute template: %w", err)
 	}
