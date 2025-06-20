@@ -51,6 +51,8 @@ type Input struct {
 	// WorkloadServices is a map from workload name to the network NetworkService of another workload which defines
 	// the hostname and the set of ports it exposes.
 	WorkloadServices map[string]NetworkService `json:"workload_services"`
+	// Namespace is the namespace of the resource.
+	Namespace string `json:"namespace"`
 
 	// -- current state --
 
@@ -229,7 +231,7 @@ func buildWorkloadServices(state *project.State) map[string]NetworkService {
 	return out
 }
 
-func ProvisionResources(ctx context.Context, state *project.State, provisioners []Provisioner) (*project.State, error) {
+func ProvisionResources(ctx context.Context, state *project.State, provisioners []Provisioner, namespace string) (*project.State, error) {
 	out := state
 
 	// provision in sorted order
@@ -280,6 +282,7 @@ func ProvisionResources(ctx context.Context, state *project.State, provisioners 
 			SourceWorkload:   resState.SourceWorkload,
 			WorkloadServices: workloadServices,
 			SharedState:      out.SharedState,
+			Namespace:        namespace,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("resource '%s': failed to provision: %w", resUid, err)

@@ -154,6 +154,9 @@
       kind: HTTPRoute
       metadata:
         name: {{ .State.routeName }}
+        {{ if ne .Namespace "" }}
++        namespace: {{ .Namespace }}
++        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}

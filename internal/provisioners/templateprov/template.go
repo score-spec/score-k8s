@@ -183,6 +183,7 @@ type Data struct {
 
 	SourceWorkload   string
 	WorkloadServices map[string]provisioners.NetworkService
+	Namespace        string
 }
 
 func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) (*provisioners.ProvisionOutput, error) {
@@ -201,6 +202,7 @@ func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) 
 		Shared:           input.SharedState,
 		SourceWorkload:   input.SourceWorkload,
 		WorkloadServices: input.WorkloadServices,
+		Namespace:        input.Namespace,
 	}
 
 	init := make(map[string]interface{})
