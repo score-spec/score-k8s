@@ -192,7 +192,7 @@ manifests. All resources and links between Workloads will be resolved and provis
 		}
 		slog.Info("Loaded provisioners", "#provisioners", len(localProvisioners))
 
-		state, err = provisioners.ProvisionResources(context.Background(), state, localProvisioners)
+		state, err = provisioners.ProvisionResources(context.Background(), state, localProvisioners, namespace)
 		if err != nil {
 			return errors.Wrap(err, "failed to provision resources")
 		}
