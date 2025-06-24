@@ -207,6 +207,9 @@
       kind: Secret
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -221,6 +224,9 @@
       kind: StatefulSet
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -310,6 +316,9 @@
       kind: Service
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -353,6 +362,9 @@
       kind: Secret
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -367,6 +379,9 @@
       kind: StatefulSet
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -452,6 +467,9 @@
       kind: Service
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -492,6 +510,9 @@
       kind: Secret
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -507,6 +528,9 @@
       kind: StatefulSet
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -591,6 +615,9 @@
       kind: Service
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -636,6 +663,9 @@
       kind: Secret
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -651,6 +681,9 @@
       kind: StatefulSet
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -728,6 +761,9 @@
       kind: Service
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -772,6 +808,9 @@
       kind: Secret
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -786,6 +825,9 @@
       kind: StatefulSet
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -877,6 +919,9 @@
       kind: Service
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -922,6 +967,9 @@
       kind: Secret
       metadata:
         name: {{ .State.service }}-secret
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -994,6 +1042,9 @@
       kind: Service
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -1042,6 +1093,9 @@
       kind: Secret
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -1056,6 +1110,9 @@
       kind: StatefulSet
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -1122,6 +1179,9 @@
       kind: Service
       metadata:
         name: {{ .State.service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         annotations:
           k8s.score.dev/source-workload: {{ .SourceWorkload }}
           k8s.score.dev/resource-uid: {{ .Uid }}
@@ -1181,6 +1241,9 @@
       kind: StatefulSet
       metadata:
         name: {{ $service | quote }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         labels:
           app.kubernetes.io/managed-by: score-k8s
           app.kubernetes.io/name: {{ $service | quote }}
@@ -1250,6 +1313,9 @@
       kind: Secret
       metadata:
         name: {{ $service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         labels:
           app.kubernetes.io/managed-by: score-k8s
           app.kubernetes.io/name: {{ $service }}
@@ -1261,6 +1327,9 @@
       kind: Service
       metadata:
         name: {{ $service }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         labels:
           app.kubernetes.io/managed-by: score-k8s
           app.kubernetes.io/name: {{ $service }}
@@ -1280,6 +1349,9 @@
       kind: Job
       metadata:
         name: {{ printf "%s-bucket-%s" $service .Guid }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
         labels:
           app.kubernetes.io/managed-by: score-k8s
       spec:
