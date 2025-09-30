@@ -138,7 +138,6 @@ binaryData:
   file: bXktY29udGVudCBleGFtcGxl
 kind: ConfigMap
 metadata:
-  creationTimestamp: null
   name: example-c1-file-7a1ae64977
 ---
 apiVersion: v1
@@ -146,7 +145,6 @@ binaryData:
   file: aGVsbG8gJHttZXRhZGF0YS5uYW1lfSB3b3JsZA==
 kind: ConfigMap
 metadata:
-  creationTimestamp: null
   name: example-c1-file-d0e9aff012
 ---
 apiVersion: v1
@@ -154,7 +152,6 @@ kind: Service
 metadata:
   annotations:
     k8s.score.dev/workload-name: example
-  creationTimestamp: null
   labels:
     app.kubernetes.io/instance: example-abcdef
     app.kubernetes.io/managed-by: score-k8s
@@ -176,7 +173,6 @@ kind: Deployment
 metadata:
   annotations:
     k8s.score.dev/workload-name: example
-  creationTimestamp: null
   labels:
     app.kubernetes.io/instance: example-abcdef
     app.kubernetes.io/managed-by: score-k8s
@@ -192,7 +188,6 @@ spec:
       annotations:
         k8s.score.dev/workload-name: example
         my.custom.scope/annotation: value
-      creationTimestamp: null
       labels:
         app.kubernetes.io/instance: example-abcdef
         app.kubernetes.io/managed-by: score-k8s

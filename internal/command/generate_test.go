@@ -509,7 +509,6 @@ kind: StatefulSet
 metadata:
     annotations:
         k8s.score.dev/workload-name: example
-    creationTimestamp: null
     labels:
         app.kubernetes.io/instance: example%[1]s
         app.kubernetes.io/managed-by: score-k8s
@@ -524,7 +523,6 @@ spec:
         metadata:
             annotations:
                 k8s.score.dev/workload-name: example
-            creationTimestamp: null
             labels:
                 app.kubernetes.io/instance: example%[1]s
                 app.kubernetes.io/managed-by: score-k8s
