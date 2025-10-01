@@ -42,7 +42,7 @@ To check and update all files, run:
 
 ```
 $ go install github.com/google/addlicense@latest
-$ addlicense -l apache -v -ignore '**/*.yaml' -c Humanitec ./*.go ./internal/
+$ addlicense -l apache -v -ignore '**/*.yaml' -c 'The Score Authors' ./*.go ./internal/
 ```
 
 ## Feature requests
