@@ -27,6 +27,7 @@ import (
 	score "github.com/score-spec/score-go/types"
 	"github.com/tidwall/sjson"
 	"gopkg.in/yaml.v3"
+	"github.com/score-spec/score-go/framework"
 
 	"github.com/score-spec/score-k8s/internal/project"
 )
@@ -57,14 +58,20 @@ type patchTemplateInput struct {
 }
 
 func ValidatePatchTemplate(content string) error {
-	if _, err := template.New("").Funcs(sprig.FuncMap()).Parse(content); err != nil {
+	if _, err := template.New("").
+		Funcs(sprig.FuncMap()).
+		Funcs(template.FuncMap{"substituteValue": SubstituteValue}).
+		Parse(content); err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
 	}
 	return nil
 }
 
 func PatchServices(state *project.State, manifests []map[string]interface{}, rawTemplate string, namespace string) ([]map[string]interface{}, error) {
-	tmpl, err := template.New("").Funcs(sprig.FuncMap()).Parse(rawTemplate)
+	tmpl, err := template.New("").
+		Funcs(sprig.FuncMap()).
+		Funcs(template.FuncMap{"substituteValue": SubstituteValue}).
+		Parse(rawTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template: %w", err)
 	}
@@ -128,4 +135,21 @@ func PatchServices(state *project.State, manifests []map[string]interface{}, raw
 		return nil, fmt.Errorf("failed to unmarshal patched output: %w", err)
 	}
 	return output, nil
+}
+
+// FIXME
+func SubstituteValue(workloadName string, value string) string {
+	sd, ok, err := project.LoadStateDirectory(".")
+	if err != nil || !ok {
+		return "failed to load state directory"
+	}
+	state := &sd.State
+	resOutputs, err := state.GetResourceOutputForWorkload(workloadName)
+	workloadMetadata := state.Workloads[workloadName].Spec.Metadata
+	substitutionFunction := framework.BuildSubstitutionFunction(workloadMetadata, resOutputs)
+	resolvedValue, err := framework.SubstituteString(value, substitutionFunction)
+	if err != nil {
+		return "failed to substitute placeholders"
+	}
+	return resolvedValue
 }
