@@ -137,8 +137,8 @@ func PatchServices(state *project.State, manifests []map[string]interface{}, raw
 	return output, nil
 }
 
-// FIXME
 func SubstituteValue(workloadName string, value string) string {
+	// Retrieve context
 	sd, ok, err := project.LoadStateDirectory(".")
 	if err != nil || !ok {
 		return "failed to load state directory"
@@ -147,9 +147,12 @@ func SubstituteValue(workloadName string, value string) string {
 	resOutputs, err := state.GetResourceOutputForWorkload(workloadName)
 	workloadMetadata := state.Workloads[workloadName].Spec.Metadata
 	substitutionFunction := framework.BuildSubstitutionFunction(workloadMetadata, resOutputs)
+	
+	// Substitute placeholders if used in value
 	resolvedValue, err := framework.SubstituteString(value, substitutionFunction)
 	if err != nil {
-		return "failed to substitute placeholders"
+		return "failed to substitute placeholders with:" + value
 	}
+
 	return resolvedValue
 }
