@@ -48,6 +48,9 @@ type Input struct {
 
 	// SourceWorkload is the name of the workload that first defined this resource or carries the params definition.
 	SourceWorkload string `json:"source_workload"`
+	// WorkloadMetadata contains the metadata from the source workload, allowing provisioners to access workload-level
+	// custom metadata fields in addition to standard fields.
+	WorkloadMetadata map[string]interface{} `json:"workload_metadata"`
 	// WorkloadServices is a map from workload name to the network NetworkService of another workload which defines
 	// the hostname and the set of ports it exposes.
 	WorkloadServices map[string]NetworkService `json:"workload_services"`
@@ -257,7 +260,7 @@ func ProvisionResources(ctx context.Context, state *project.State, provisioners 
 		}
 
 		var params map[string]interface{}
-		if resState.Params != nil && len(resState.Params) > 0 {
+		if len(resState.Params) > 0 {
 			resOutputs, err := out.GetResourceOutputForWorkload(resState.SourceWorkload)
 			if err != nil {
 				return nil, fmt.Errorf("failed to find resource params for resource '%s': %w", resUid, err)
@@ -280,6 +283,7 @@ func ProvisionResources(ctx context.Context, state *project.State, provisioners 
 			ResourceMetadata: resState.Metadata,
 			ResourceState:    resState.State,
 			SourceWorkload:   resState.SourceWorkload,
+			WorkloadMetadata: out.Workloads[resState.SourceWorkload].Spec.Metadata,
 			WorkloadServices: workloadServices,
 			SharedState:      out.SharedState,
 			Namespace:        namespace,
