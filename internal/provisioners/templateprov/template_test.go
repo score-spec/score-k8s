@@ -65,6 +65,7 @@ c: {{ .Shared.c }}
 		ResourceId:       resUid.Id(),
 		ResourceParams:   map[string]interface{}{"pk": "pv"},
 		ResourceMetadata: map[string]interface{}{"mk": "mv"},
+		WorkloadMetadata: map[string]interface{}{"name": "w", "customField": "customValue"},
 		ResourceState:    map[string]interface{}{"sk": "sv"},
 		SharedState:      map[string]interface{}{"ssk": "ssv"},
 	})

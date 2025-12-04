@@ -182,6 +182,7 @@ type Data struct {
 	Shared map[string]interface{}
 
 	SourceWorkload   string
+	WorkloadMetadata map[string]interface{}
 	WorkloadServices map[string]provisioners.NetworkService
 	Namespace        string
 }
@@ -201,6 +202,7 @@ func (p *Provisioner) Provision(ctx context.Context, input *provisioners.Input) 
 		State:            input.ResourceState,
 		Shared:           input.SharedState,
 		SourceWorkload:   input.SourceWorkload,
+		WorkloadMetadata: input.WorkloadMetadata,
 		WorkloadServices: input.WorkloadServices,
 		Namespace:        input.Namespace,
 	}
