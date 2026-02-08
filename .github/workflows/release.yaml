@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  release:
+  release-go-binary:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -25,8 +25,6 @@ jobs:
           go-version-file: 'go.mod'
       - name: Install Cosign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
-        with:
-          cosign-release: "v2.6.1"
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
@@ -36,37 +34,31 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}  
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
-      - name: Login to Docker Hub (docker.io)
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_RELEASE_TOKEN }}
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
-        with:
-          registry: ghcr.io
+  release-container-image:
+    uses: docker/github-builder/.github/workflows/build.yml@c767551a26459c30e1f683df73a12fdb918f7068 # v1.0.0
+    permissions:
+      id-token: write # to sign attestation(s) with GitHub OIDC Token
+      packages: write # to push container image to ghcr
+    with:
+      output: image
+      push: true
+      platforms: linux/amd64,linux/arm64
+      sbom: true
+      context: .
+      set-meta-labels: true
+      set-meta-annotations: true
+      build-args: |
+        "VERSION=${{ github.ref_name }}"
+      meta-images: |
+        ghcr.io/score-spec/score-k8s
+        scorespec/score-k8s
+      meta-tags: |
+        type=ref,event=tag
+        latest
+    secrets:
+      registry-auths: |
+        - registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push docker image
-        id: build-push-container
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: mode=max
-          sbom: true
-          tags: |
-            ghcr.io/score-spec/score-k8s:${{ github.ref_name }}
-            ghcr.io/score-spec/score-k8s:latest
-            docker.io/scorespec/score-k8s:${{ github.ref_name }}
-            docker.io/scorespec/score-k8s:latest
-          build-args: |
-            "VERSION=${{ github.ref_name }}"
-      - name: Sign container image
-        run: |
-          cosign sign --yes ghcr.io/score-spec/score-k8s@${{ steps.build-push-container.outputs.digest }}
-          cosign sign --yes scorespec/score-radius@${{ steps.build-push-container.outputs.digest }}
+        - username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_RELEASE_TOKEN }}
