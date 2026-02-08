@@ -1,4 +1,4 @@
-FROM golang:1.25.7-alpine@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced AS builder
+FROM --platform=$BUILDPLATFORM dhi.io/golang:1.25.7-alpine3.23-dev@sha256:3911f7c6405bf6d2cbfd9d045cc7425ea6126ac3ebb7fb465f273ea9289909d9 AS builder
 
 ARG VERSION=0.0.0
 
@@ -13,8 +13,8 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X github.com/score-spec/score-k8s/internal/version.Version=${VERSION}" -o /usr/local/bin/score-k8s ./cmd/score-k8s
 
-# We can use gcr.io/distroless/static since we don't rely on any linux libs or state, but we need ca-certificates to connect to https/oci with the init command.
-FROM gcr.io/distroless/static:530158861eebdbbf149f7e7e67bfe45eb433a35c@sha256:5c7e2b465ac6a2a4e5f4f7f722ce43b147dabe87cb21ac6c4007ae5178a1fa58
+# We can use static since we don't rely on any linux libs or state, but we need ca-certificates to connect to https/oci with the init command.
+FROM dhi.io/static:20251003-alpine3.23@sha256:f5c9799d5834f66db6912303ba88eaf53a3c7cc3ddc97a282a6bbd8672e15d24
 
 # Set the current working directory inside the container.
 WORKDIR /score-k8s
