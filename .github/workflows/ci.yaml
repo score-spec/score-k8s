@@ -1,7 +1,11 @@
 name: ci
 on:
-  # We run the CI checks on any pull request updates or pushes to the main branch after PR merge.
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   push:
     branches:
       - main
