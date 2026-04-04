@@ -78,10 +78,10 @@ manifests. All resources and links between Workloads will be resolved and provis
   score-k8s generate score.yaml --patch-manifests */*/metadata.annotations.key=value --patch-manifests Deployment/foo/spec.replicas=4
 
   # Set namespace for all resources
-  score-k8s generate score.yaml --namespace=test-ns|-n test-ns
+  score-k8s generate score.yaml --namespace=test-ns
 
   # Generate namespace manifest and set namespace for all resources
-  score-k8s generate score.yaml --namespace=test-ns|-n test-ns --generate-namespace`,
+  score-k8s generate score.yaml --namespace=test-ns --generate-namespace`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
@@ -90,7 +90,7 @@ manifests. All resources and links between Workloads will be resolved and provis
 		generateNamespace, _ := cmd.Flags().GetBool(generateCmdGenerateNamespaceFlag)
 		namespace, _ := cmd.Flags().GetString(generateCmdNamespaceFlag)
 		if generateNamespace && namespace == "" {
-			return fmt.Errorf("--namespace or -n flag is required when using --generate-namespace")
+			return fmt.Errorf("--namespace flag is required when using --generate-namespace")
 		}
 
 		sd, ok, err := project.LoadStateDirectory(".")
@@ -424,7 +424,7 @@ func init() {
 	generateCmd.Flags().StringP(generateCmdImageFlag, "i", "", "An optional container image to use for any container with image == '.'")
 	generateCmd.Flags().StringArray(generateCmdPatchManifestsFlag, []string{}, "An optional set of <kind|*>/<name|*>/path=key operations for the output manifests")
 	generateCmd.Flags().StringP(generateCmdNamespaceFlag, "n", "", "An optional namespace to set for all generated resources")
-	generateCmd.Flags().Bool(generateCmdGenerateNamespaceFlag, false, "If true, generate a namespace manifest. Requires --namespace or -n to be set")
+	generateCmd.Flags().Bool(generateCmdGenerateNamespaceFlag, false, "If true, generate a namespace manifest. Requires --namespace to be set")
 
 	rootCmd.AddCommand(generateCmd)
 }
