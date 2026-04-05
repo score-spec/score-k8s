@@ -423,7 +423,7 @@ func init() {
 	generateCmd.Flags().StringArray(generateCmdOverridePropertyFlag, []string{}, "An optional set of path=key overrides to set or remove")
 	generateCmd.Flags().StringP(generateCmdImageFlag, "i", "", "An optional container image to use for any container with image == '.'")
 	generateCmd.Flags().StringArray(generateCmdPatchManifestsFlag, []string{}, "An optional set of <kind|*>/<name|*>/path=key operations for the output manifests")
-	generateCmd.Flags().String(generateCmdNamespaceFlag, "", "An optional namespace to set for all generated resources")
+	generateCmd.Flags().StringP(generateCmdNamespaceFlag, "n", "", "An optional namespace to set for all generated resources")
 	generateCmd.Flags().Bool(generateCmdGenerateNamespaceFlag, false, "If true, generate a namespace manifest. Requires --namespace to be set")
 
 	rootCmd.AddCommand(generateCmd)
