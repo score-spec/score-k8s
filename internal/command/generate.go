@@ -47,7 +47,6 @@ const (
 	generateCmdOverridePropertyFlag  = "override-property"
 	generateCmdImageFlag             = "image"
 	generateCmdOutputFlag            = "output"
-	generateCmdPatchManifestsFlag    = "patch-manifests"
 	generateCmdNamespaceFlag         = "namespace"
 	generateCmdGenerateNamespaceFlag = "generate-namespace"
 )
@@ -283,17 +282,6 @@ manifests. All resources and links between Workloads will be resolved and provis
 			}
 		}
 
-		// patch manifests here
-		// TODO: deprecate this!
-		if v, _ := cmd.Flags().GetStringArray(generateCmdPatchManifestsFlag); len(v) > 0 {
-			for _, entry := range v {
-				slog.Warn(fmt.Sprintf("%s is deprecated and may be removed in a future version, please move to --patch-templates", generateCmdPatchManifestsFlag))
-				if outputManifests, err = parseAndApplyManifestPatches(entry, generateCmdPatchManifestsFlag, outputManifests); err != nil {
-					return err
-				}
-			}
-		}
-
 		for i, content := range state.Extras.PatchingTemplates {
 			slog.Info(fmt.Sprintf("Applying patching template %d", i+1))
 			outputManifests, err = patching.PatchServices(state, outputManifests, content, namespace)
@@ -364,48 +352,6 @@ func parseAndApplyOverrideProperty(entry string, flagName string, spec map[strin
 	}
 }
 
-func parseAndApplyManifestPatches(entry string, flagName string, manifests []map[string]interface{}) ([]map[string]interface{}, error) {
-	parts := strings.SplitN(entry, "=", 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("--%s '%s' is invalid, expected a =-separated path and value", flagName, entry)
-	}
-	filter := strings.SplitN(parts[0], "/", 3)
-	if len(filter) != 3 {
-		return nil, fmt.Errorf("--%s '%s' is invalid, expected the patch path to have an initial <kind>/<name>/... prefix", flagName, entry)
-	}
-	kindFilter, nameFilter, path := filter[0], filter[1], filter[2]
-	outManifests := slices.Clone(manifests)
-
-	for i, manifest := range manifests {
-		kind, kOk := manifest["kind"].(string)
-		meta, _ := manifest["metadata"].(map[string]interface{})
-		name, nOk := meta["name"].(string)
-		if (kindFilter == "*" || (kOk && kind == kindFilter)) && (nameFilter == "*" || (nOk && name == nameFilter)) {
-			if parts[1] == "" {
-				slog.Info(fmt.Sprintf("Overriding '%s' in manifest %s/%s", path, kind, name))
-				after, err := framework.OverridePathInMap(manifest, framework.ParseDotPathParts(path), true, nil)
-				if err != nil {
-					return nil, fmt.Errorf("--%s '%s' could not be applied to %s/%s: %w", flagName, entry, kind, name, err)
-				}
-				manifest = after
-			} else {
-				var value interface{}
-				if err := yaml.Unmarshal([]byte(parts[1]), &value); err != nil {
-					return nil, fmt.Errorf("--%s '%s' is invalid, failed to unmarshal value as yaml: %w", flagName, entry, err)
-				}
-				slog.Info(fmt.Sprintf("Overriding '%s' in manifest %s/%s", path, kind, name))
-				after, err := framework.OverridePathInMap(manifest, framework.ParseDotPathParts(path), false, value)
-				if err != nil {
-					return nil, fmt.Errorf("--%s '%s' could not be applied to %s/%s: %w", flagName, entry, kind, name, err)
-				}
-				manifest = after
-			}
-		}
-		outManifests[i] = manifest
-	}
-	return outManifests, nil
-}
-
 // buildManifestSignature builds a unique manifest signature for each manifest coming out of a resource. This is used
 // to deduplicate resource manifests when they share state.
 func buildManifestSignature(n map[string]interface{}) string {
@@ -422,7 +368,6 @@ func init() {
 	generateCmd.Flags().String(generateCmdOverridesFileFlag, "", "An optional file of Score overrides to merge in")
 	generateCmd.Flags().StringArray(generateCmdOverridePropertyFlag, []string{}, "An optional set of path=key overrides to set or remove")
 	generateCmd.Flags().StringP(generateCmdImageFlag, "i", "", "An optional container image to use for any container with image == '.'")
-	generateCmd.Flags().StringArray(generateCmdPatchManifestsFlag, []string{}, "An optional set of <kind|*>/<name|*>/path=key operations for the output manifests")
 	generateCmd.Flags().StringP(generateCmdNamespaceFlag, "n", "", "An optional namespace to set for all generated resources")
 	generateCmd.Flags().Bool(generateCmdGenerateNamespaceFlag, false, "If true, generate a namespace manifest. Requires --namespace to be set")
 

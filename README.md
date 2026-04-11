@@ -147,8 +147,8 @@ Examples:
   # Provide overrides when one score file is provided
   score-k8s generate score.yaml --override-file=./overrides.score.yaml --override-property=metadata.key=value
 
-  # Patch resulting manifests
-  score-k8s generate score.yaml --patch-manifests */*/metadata.annotations.key=value --patch-manifests Deployment/foo/spec.replicas=4
+  # Patch resulting manifests using patch templates
+  score-k8s generate score.yaml --patch-templates ./patch.yaml
 
   # Set namespace for all resources
   score-k8s generate score.yaml --namespace=test-ns
@@ -162,7 +162,6 @@ Flags:
   -o, --output string                   The output manifests file to write the manifests to (default "manifests.yaml")
       --override-property stringArray   An optional set of path=key overrides to set or remove
       --overrides-file string           An optional file of Score overrides to merge in
-      --patch-manifests stringArray     An optional set of <kind|*>/<name|*>/path=key operations for the output manifests
       --namespace string               An optional namespace to set for all generated resources
       --generate-namespace              If true, generate a namespace manifest (requires --namespace to be set)
 ```
@@ -269,7 +268,7 @@ score-k8s generate score.yaml --namespace=test-ns --generate-namespace
 
 ### How do I modify the generated manifests or add and remove from them?
 
-Use the `--patch-templates` options. Patch templates are small Go Text Template files which can output a set of JSON "patch" operations on the list of manifests. This is intended to deprecate the `--patch-manifests` option.
+Use the `--patch-templates` options. Patch templates are small Go Text Template files which can output a set of JSON "patch" operations on the list of manifests.
 
 Template inputs:
 
