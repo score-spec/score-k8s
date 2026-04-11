@@ -194,7 +194,9 @@ URI Retrieval:
 					return errors.Wrap(err, "failed to open empty Score file")
 				} else {
 					defer f.Close()
-					if err := yaml.NewEncoder(f).Encode(workload); err != nil {
+					enc := yaml.NewEncoder(f)
+					enc.SetIndent(2)
+					if err := enc.Encode(workload); err != nil {
 						return errors.Wrap(err, "failed to write Score file")
 					}
 					slog.Info("Created initial Score file", "file", initCmdScoreFile)
