@@ -293,7 +293,9 @@ manifests. All resources and links between Workloads will be resolved and provis
 		out := new(bytes.Buffer)
 		for _, manifest := range outputManifests {
 			out.WriteString("---\n")
-			_ = yaml.NewEncoder(out).Encode(manifest)
+			enc := yaml.NewEncoder(out)
+			enc.SetIndent(2)
+			_ = enc.Encode(manifest)
 		}
 		v, _ := cmd.Flags().GetString(generateCmdOutputFlag)
 		if v == "" {

@@ -507,43 +507,43 @@ containers:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-    annotations:
+  annotations:
+    k8s.score.dev/workload-name: example
+  labels:
+    app.kubernetes.io/instance: example%[1]s
+    app.kubernetes.io/managed-by: score-k8s
+    app.kubernetes.io/name: example
+  name: example
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: example%[1]s
+  serviceName: example-headless-svc
+  template:
+    metadata:
+      annotations:
         k8s.score.dev/workload-name: example
-    labels:
+      labels:
         app.kubernetes.io/instance: example%[1]s
         app.kubernetes.io/managed-by: score-k8s
         app.kubernetes.io/name: example
-    name: example
-spec:
-    selector:
-        matchLabels:
-            app.kubernetes.io/instance: example%[1]s
-    serviceName: example-headless-svc
-    template:
-        metadata:
-            annotations:
-                k8s.score.dev/workload-name: example
-            labels:
-                app.kubernetes.io/instance: example%[1]s
-                app.kubernetes.io/managed-by: score-k8s
-                app.kubernetes.io/name: example
-        spec:
-            containers:
-                - image: foo
-                  name: hello
-                  resources: {}
+    spec:
+      containers:
+        - image: foo
+          name: hello
+          resources: {}
 status: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-    name: example-headless-svc
+  name: example-headless-svc
 spec:
-    clusterIP: None
-    ports:
-        - name: "99"
-          port: 99
-    selector:
-        app.kubernetes.io/instance: example%[1]s
+  clusterIP: None
+  ports:
+    - name: "99"
+      port: 99
+  selector:
+    app.kubernetes.io/instance: example%[1]s
 `, sd.State.Workloads["example"].Extras.InstanceSuffix))
 }
