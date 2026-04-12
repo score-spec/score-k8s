@@ -147,9 +147,6 @@ Examples:
   # Provide overrides when one score file is provided
   score-k8s generate score.yaml --override-file=./overrides.score.yaml --override-property=metadata.key=value
 
-  # Patch resulting manifests using patch templates
-  score-k8s generate score.yaml --patch-templates ./patch.yaml
-
   # Set namespace for all resources
   score-k8s generate score.yaml --namespace=test-ns
 
