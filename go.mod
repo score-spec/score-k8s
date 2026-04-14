@@ -71,3 +71,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/score-spec/score-go => github.com/Abhishek9639/score-go v0.0.0-20260415094058-8a2615c996fb
