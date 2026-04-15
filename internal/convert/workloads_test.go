@@ -135,17 +135,17 @@ func TestMassive(t *testing.T) {
 	}
 	assert.Equal(t, `apiVersion: v1
 binaryData:
-  file: bXktY29udGVudCBleGFtcGxl
-kind: ConfigMap
-metadata:
-  name: example-c1-file-7a1ae64977
----
-apiVersion: v1
-binaryData:
   file: aGVsbG8gJHttZXRhZGF0YS5uYW1lfSB3b3JsZA==
 kind: ConfigMap
 metadata:
   name: example-c1-file-d0e9aff012
+---
+apiVersion: v1
+binaryData:
+  file: bXktY29udGVudCBleGFtcGxl
+kind: ConfigMap
+metadata:
+  name: example-c1-file-7a1ae64977
 ---
 apiVersion: v1
 kind: Service
@@ -245,13 +245,13 @@ spec:
           - configMap:
               items:
               - key: file
-                path: root.md
-              name: example-c1-file-7a1ae64977
+                path: binary
+              name: example-c1-file-d0e9aff012
           - configMap:
               items:
               - key: file
-                path: binary
-              name: example-c1-file-d0e9aff012
+                path: root.md
+              name: example-c1-file-7a1ae64977
 status: {}
 ---
 `, out.String())
