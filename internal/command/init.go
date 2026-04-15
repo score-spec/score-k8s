@@ -208,12 +208,18 @@ URI Retrieval:
 
 		if v, _ := cmd.Flags().GetStringArray(initCmdProvisionerFlag); len(v) > 0 {
 			for i, vi := range v {
-				data, err := uriget.GetFile(cmd.Context(), vi)
+				files, err := uriget.GetFiles(cmd.Context(), vi)
 				if err != nil {
 					return fmt.Errorf("failed to load provisioner %d: %w", i+1, err)
 				}
-				if err := loader.SaveProvisionerToDirectory(sd.Path, vi, data); err != nil {
-					return fmt.Errorf("failed to save provisioner %d: %w", i+1, err)
+				for _, f := range files {
+					saveFilename := f.URI
+					if saveFilename == "-" {
+						saveFilename = "from-stdin.provisioners.yaml"
+					}
+					if err := loader.SaveProvisionerToDirectory(sd.Path, saveFilename, f.Content); err != nil {
+						return fmt.Errorf("failed to save provisioner from %s: %w", f.URI, err)
+					}
 				}
 			}
 		}
