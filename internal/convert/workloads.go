@@ -16,6 +16,7 @@ package convert
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -110,7 +111,8 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			}
 			return sf(ref)
 		}
-		for target, volume := range container.Volumes {
+		for _, target := range slices.Sorted(maps.Keys(container.Volumes)) {
+			volume := container.Volumes[target]
 			if mount, vol, claim, err := convertContainerVolume(target, volume, state.Resources, volSubstitutionFunction); err != nil {
 				return nil, errors.Wrapf(err, "containers.%s.volumes.%s: failed to convert", containerName, target)
 			} else {
@@ -126,7 +128,8 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			}
 		}
 
-		for target, f := range container.Files {
+		for _, target := range slices.Sorted(maps.Keys(container.Files)) {
+			f := container.Files[target]
 			if mount, cfg, vol, err := convertContainerFile(target, f, fmt.Sprintf("%s-%s-", workloadName, containerName), state.Workloads[workloadName].File, sf); err != nil {
 				return nil, errors.Wrapf(err, "containers.%s.files.%s: failed to convert", containerName, target)
 			} else {
