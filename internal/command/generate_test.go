@@ -547,3 +547,108 @@ spec:
     app.kubernetes.io/instance: example%[1]s
 `, sd.State.Workloads["example"].Extras.InstanceSuffix))
 }
+
+func TestGenerate_before_healthy_rejected(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  init:
+    image: my-app:latest
+    before:
+      app:
+        ready: healthy
+  app:
+    image: my-app:latest
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ready 'healthy' is not supported in score-k8s")
+}
+
+func TestGenerate_before_self_reference(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  app:
+    image: my-app:latest
+    before:
+      app:
+        ready: complete
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "self-referencing before entry")
+}
+
+func TestGenerate_before_unknown_container(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  init:
+    image: my-app:latest
+    before:
+      nonexistent:
+        ready: complete
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "refers to unknown container")
+}
+
+func TestGenerate_before_valid_complete(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  migrate:
+    image: my-app:latest
+    command: ["migrate"]
+    before:
+      app:
+        ready: complete
+  app:
+    image: my-app:latest
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	require.NoError(t, err)
+
+	raw, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "initContainers")
+	assert.Contains(t, string(raw), "name: migrate")
+}
