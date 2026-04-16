@@ -64,7 +64,7 @@ func executeAndResetCommand(ctx context.Context, cmd *cobra.Command, args []stri
 func TestRootVersion(t *testing.T) {
 	stdout, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"--version"})
 	assert.NoError(t, err)
-	pattern := regexp.MustCompile(`^score-k8s 0.0.0 \(build: \S+, sha: \S+\)\n$`)
+	pattern := regexp.MustCompile(`^score-k8s 0\.0\.0 \(go\S+ - \S+/\S+\)\ngit commit: \S+\nbuild date: \S+\n$`)
 	assert.Truef(t, pattern.MatchString(stdout), "%s does not match: '%s'", pattern.String(), stdout)
 	assert.Equal(t, "", stderr)
 }
