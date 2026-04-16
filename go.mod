@@ -9,14 +9,14 @@ require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/pkg/errors v0.9.1
-	github.com/score-spec/score-go v1.13.0
+	github.com/score-spec/score-go v1.15.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/sjson v1.2.5
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.35.3
-	k8s.io/apimachinery v0.35.3
+	k8s.io/api v0.35.4
+	k8s.io/apimachinery v0.35.4
 )
 
 require (

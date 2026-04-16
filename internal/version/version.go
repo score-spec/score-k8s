@@ -17,39 +17,21 @@ package version
 import (
 	"fmt"
 	"regexp"
-	"runtime/debug"
+	"runtime"
 	"strconv"
 )
 
 var (
 	Version             string = "0.0.0"
+	GitCommit           string = "unknown"
+	BuildDate           string = "unknown"
 	semverPattern              = regexp.MustCompile(`^(?:v?)(\d+)(?:\.(\d+))?(?:\.(\d+))?$`)
 	constraintAndSemver        = regexp.MustCompile("^(>|>=|=)?" + semverPattern.String()[1:])
 )
 
 // BuildVersionString constructs a version string by looking at the build metadata injected at build time.
-// This is particularly useful when score-k8s is installed from the go module using go install.
 func BuildVersionString() string {
-	versionNumber, buildTime, gitSha, isDirtySuffix := Version, "local", "unknown", ""
-	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, setting := range info.Settings {
-			switch setting.Key {
-			case "vcs.time":
-				if setting.Value != "" {
-					buildTime = setting.Value
-				}
-			case "vcs.revision":
-				if setting.Value != "" {
-					gitSha = setting.Value
-				}
-			case "vcs.modified":
-				if setting.Value == "true" {
-					isDirtySuffix = "-dirty"
-				}
-			}
-		}
-	}
-	return fmt.Sprintf("%s (build: %s, sha: %s%s)", versionNumber, buildTime, gitSha, isDirtySuffix)
+	return fmt.Sprintf("%s (%s - %s/%s)\ngit commit: %s\nbuild date: %s", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH, GitCommit, BuildDate)
 }
 
 func semverToI(x string) (int, error) {
