@@ -24,8 +24,10 @@ import (
 	"github.com/score-spec/score-k8s/internal/version"
 )
 
+var ScoreImplementationName = "score-k8s"
+
 var rootCmd = &cobra.Command{
-	Use:   "score-k8s",
+	Use:   ScoreImplementationName,
 	Short: "Score to Kubernetes manifest translator",
 	Long: `Score is a specification for defining environment agnostic configuration for cloud based workloads.
 This tool produces a file of Kubernetes manifests from the Score specification.`,
@@ -50,8 +52,7 @@ This tool produces a file of Kubernetes manifests from the Score specification.`
 
 func init() {
 	rootCmd.Version = version.BuildVersionString()
-	rootCmd.SetVersionTemplate(`{{with .Name}}{{printf "%s " .}}{{end}}{{printf "%s" .Version}}
-`)
+	rootCmd.SetVersionTemplate(`{{with .Name}}{{printf "%s " .}}{{end}}{{printf "%s\n" .Version}}`)
 	rootCmd.PersistentFlags().Bool("quiet", false, "Mute any logging output")
 	rootCmd.PersistentFlags().CountP("verbose", "v", "Increase log verbosity and detail by specifying this flag one or more times")
 }
