@@ -9,7 +9,7 @@ require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/pkg/errors v0.9.1
-	github.com/score-spec/score-go v1.15.0
+	github.com/score-spec/score-go v1.16.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
@@ -71,5 +71,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
-replace github.com/score-spec/score-go => github.com/Abhishek9639/score-go v0.0.0-20260415094058-8a2615c996fb
