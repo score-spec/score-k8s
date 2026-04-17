@@ -9,6 +9,8 @@ builds:
     main: ./cmd/score-k8s
     ldflags:
       - -X github.com/score-spec/score-k8s/internal/version.Version={{ .Version }}
+      - -X github.com/score-spec/score-k8s/internal/version.GitCommit={{ .Commit }}
+      - -X github.com/score-spec/score-k8s/internal/version.BuildDate={{ .Date }}
     env:
       - CGO_ENABLED=0
     targets:
