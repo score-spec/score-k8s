@@ -1,6 +1,6 @@
 module github.com/score-spec/score-k8s
 
-go 1.26
+go 1.26.0
 
 toolchain go1.26.2
 
@@ -15,8 +15,8 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/sjson v1.2.5
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.35.4
-	k8s.io/apimachinery v0.35.4
+	k8s.io/api v0.36.0
+	k8s.io/apimachinery v0.36.0
 )
 
 require (
