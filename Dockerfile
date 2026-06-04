@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM dhi.io/golang:1.26.2-alpine3.23-dev@sha256:0d916bcd9ca2060863389d96c8ea686d72e03ccc48ebf498be2150f21f720999 AS builder
+FROM --platform=$BUILDPLATFORM dhi.io/golang:1.26.3-alpine3.23-dev@sha256:dd699a69f42fb6d232b420bd256b824219093bb135cc3158b765844f52126c71 AS builder
 
 ARG VERSION=0.0.0
 ARG GIT_COMMIT=unknown
@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=linux \
     -o /usr/local/bin/score-k8s ./cmd/score-k8s
 
 # We can use static since we don't rely on any linux libs or state, but we need ca-certificates to connect to https/oci with the init command.
-FROM dhi.io/static:20260413-alpine3.23@sha256:33a44e9862f4aa8555e544d2c6100b340611c7b905cc939acc585d55a3d13361
+FROM dhi.io/static:20260413-alpine3.23@sha256:eeea5b5f4dc394069d2afb9e83af0b4af640709fda0c2cfbdbdbbb3a4b8ecf6f
 
 # Set the current working directory inside the container.
 WORKDIR /score-k8s

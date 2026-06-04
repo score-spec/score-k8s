@@ -199,13 +199,13 @@ func TestInitAndGenerate_with_sample(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "", stdout)
 
-	// write overrides file
+	// write overrides file adding an extra resource
 	assert.NoError(t, os.WriteFile(filepath.Join(td, "overrides.yaml"), []byte(`{"resources": {"foo": {"type": "example-provisioner-resource"}}}`), 0644))
-	// generate
+	// generate using the default sample score file
 	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
 		"generate", "-o", "manifests.yaml",
 		"--overrides-file", "overrides.yaml",
-		"--override-property", "containers.main.variables.THING=${resources.foo.plaintext}",
+		"--override-property", "containers.hello-world.variables.THING=${resources.foo.plaintext}",
 		"--", "score.yaml",
 	})
 	require.NoError(t, err)
@@ -216,13 +216,14 @@ func TestInitAndGenerate_with_sample(t *testing.T) {
 	assert.Contains(t, string(raw), "\nkind: Service\n")
 	assert.Contains(t, string(raw), "\nkind: Deployment\n")
 
-	// check that state was persisted
+	// check that state was persisted with the new sample structure
 	sd, ok, err := project.LoadStateDirectory(td)
 	assert.NoError(t, err)
 	assert.True(t, ok)
-	assert.Equal(t, "score.yaml", *sd.State.Workloads["example"].File)
+	assert.Equal(t, "score.yaml", *sd.State.Workloads["hello-world"].File)
 	assert.Len(t, sd.State.Workloads, 1)
-	assert.Len(t, sd.State.Resources, 1)
+	// 3 resources from the sample (db, dns, route) + 1 from the overrides file (foo)
+	assert.Len(t, sd.State.Resources, 4)
 }
 
 func TestInitAndGenerate_with_image_override(t *testing.T) {

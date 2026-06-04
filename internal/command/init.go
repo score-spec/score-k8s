@@ -22,10 +22,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/score-spec/score-go/framework"
-	scoretypes "github.com/score-spec/score-go/types"
 	"github.com/score-spec/score-go/uriget"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"github.com/score-spec/score-k8s/internal/patching"
 	"github.com/score-spec/score-k8s/internal/project"
@@ -39,6 +37,46 @@ const (
 	initCmdProvisionerFlag           = "provisioners"
 	initCmdPatchTemplateFlag         = "patch-templates"
 	initCmdNoDefaultProvisionersFlag = "no-default-provisioners"
+
+	DefaultScoreFileContent = `# Score provides a developer-centric and platform-agnostic
+# Workload specification to improve developer productivity and experience.
+# Score eliminates configuration management between local and remote environments.
+#
+# Get started with Score: https://docs.score.dev/docs/get-started/.
+---
+apiVersion: score.dev/v1b1
+metadata:
+  name: hello-world
+  annotations:
+    tags: "nodejs,http,website,javascript,postgres"
+containers:
+  hello-world:
+    image: scorespec/sample-score-app:latest
+    variables:
+      PORT: "3000"
+      MESSAGE: "Hello, World!"
+      DB_DATABASE: ${resources.db.name}
+      DB_USER: ${resources.db.username}
+      DB_PASSWORD: ${resources.db.password}
+      DB_HOST: ${resources.db.host}
+      DB_PORT: ${resources.db.port}
+resources:
+  db:
+    type: postgres
+  dns:
+    type: dns
+  route:
+    type: route
+    params:
+      host: ${resources.dns.host}
+      path: /
+      port: 8080
+service:
+  ports:
+    www:
+      port: 8080
+      targetPort: 3000
+`
 )
 
 var initCmd = &cobra.Command{
@@ -177,33 +215,10 @@ URI Retrieval:
 			if v, _ := cmd.Flags().GetBool(initCmdFileNoSampleFlag); v {
 				slog.Info("Initial Score file does not exist - and sample generation is disabled", "file", initCmdScoreFile)
 			} else {
-				workload := &scoretypes.Workload{
-					ApiVersion: "score.dev/v1b1",
-					Metadata: map[string]interface{}{
-						"name": "example",
-					},
-					Containers: map[string]scoretypes.Container{
-						"main": {
-							Image: "stefanprodan/podinfo",
-						},
-					},
-					Service: &scoretypes.WorkloadService{
-						Ports: map[string]scoretypes.ServicePort{
-							"web": {Port: 8080},
-						},
-					},
+				if err := os.WriteFile(initCmdScoreFile, []byte(DefaultScoreFileContent), 0755); err != nil {
+					return errors.Wrap(err, "failed to write Score file")
 				}
-				if f, err := os.OpenFile(initCmdScoreFile, os.O_CREATE|os.O_WRONLY, 0755); err != nil {
-					return errors.Wrap(err, "failed to open empty Score file")
-				} else {
-					defer f.Close()
-					enc := yaml.NewEncoder(f)
-					enc.SetIndent(2)
-					if err := enc.Encode(workload); err != nil {
-						return errors.Wrap(err, "failed to write Score file")
-					}
-					slog.Info("Created initial Score file", "file", initCmdScoreFile)
-				}
+				slog.Info("Created initial Score file", "file", initCmdScoreFile)
 			}
 		} else {
 			slog.Info("Skipping creation of initial Score file since it already exists", "file", initCmdScoreFile)
