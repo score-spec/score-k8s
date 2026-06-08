@@ -23,6 +23,8 @@ import (
 	scoretypes "github.com/score-spec/score-go/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/apps/v1"
+	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/score-spec/score-k8s/internal"
@@ -255,4 +257,170 @@ spec:
 status: {}
 ---
 `, out.String())
+}
+
+func TestConvertWorkload_BeforeComplete(t *testing.T) {
+	// Container with before: {app: {ready: complete}} should go to initContainers
+	var err error
+	state := new(project.State)
+	state, err = state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{"name": "example"},
+		Containers: map[string]scoretypes.Container{
+			"migrate": {
+				Image:   "my-app:latest",
+				Command: []string{"migrate"},
+				Before: scoretypes.ContainerBefore{
+					"app": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyComplete,
+					},
+				},
+			},
+			"app": {
+				Image: "my-app:latest",
+			},
+		},
+	}, nil, project.WorkloadExtras{InstanceSuffix: "-test"})
+	require.NoError(t, err)
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+
+	// Find the Deployment
+	for _, m := range manifests {
+		if dep, ok := m.(*v1.Deployment); ok {
+			assert.Len(t, dep.Spec.Template.Spec.InitContainers, 1, "expected 1 init container")
+			assert.Equal(t, "migrate", dep.Spec.Template.Spec.InitContainers[0].Name)
+			assert.Nil(t, dep.Spec.Template.Spec.InitContainers[0].RestartPolicy, "complete init container should not have restartPolicy")
+
+			assert.Len(t, dep.Spec.Template.Spec.Containers, 1, "expected 1 regular container")
+			assert.Equal(t, "app", dep.Spec.Template.Spec.Containers[0].Name)
+			return
+		}
+	}
+	t.Fatal("no Deployment found in manifests")
+}
+
+func TestConvertWorkload_BeforeStarted(t *testing.T) {
+	// Container with before: {app: {ready: started}} should go to initContainers with restartPolicy: Always
+	var err error
+	state := new(project.State)
+	state, err = state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{"name": "example"},
+		Containers: map[string]scoretypes.Container{
+			"sidecar": {
+				Image: "sidecar:latest",
+				Before: scoretypes.ContainerBefore{
+					"app": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyStarted,
+					},
+				},
+			},
+			"app": {
+				Image: "my-app:latest",
+			},
+		},
+	}, nil, project.WorkloadExtras{InstanceSuffix: "-test"})
+	require.NoError(t, err)
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+
+	for _, m := range manifests {
+		if dep, ok := m.(*v1.Deployment); ok {
+			assert.Len(t, dep.Spec.Template.Spec.InitContainers, 1, "expected 1 init container")
+			assert.Equal(t, "sidecar", dep.Spec.Template.Spec.InitContainers[0].Name)
+			require.NotNil(t, dep.Spec.Template.Spec.InitContainers[0].RestartPolicy, "sidecar should have restartPolicy")
+			assert.Equal(t, coreV1.ContainerRestartPolicyAlways, *dep.Spec.Template.Spec.InitContainers[0].RestartPolicy)
+
+			assert.Len(t, dep.Spec.Template.Spec.Containers, 1, "expected 1 regular container")
+			assert.Equal(t, "app", dep.Spec.Template.Spec.Containers[0].Name)
+			return
+		}
+	}
+	t.Fatal("no Deployment found in manifests")
+}
+
+func TestConvertWorkload_NoBefore(t *testing.T) {
+	// Containers without before should all go to regular containers (backward compatible)
+	var err error
+	state := new(project.State)
+	state, err = state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{"name": "example"},
+		Containers: map[string]scoretypes.Container{
+			"web": {
+				Image: "nginx:latest",
+			},
+			"worker": {
+				Image: "worker:latest",
+			},
+		},
+	}, nil, project.WorkloadExtras{InstanceSuffix: "-test"})
+	require.NoError(t, err)
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+
+	for _, m := range manifests {
+		if dep, ok := m.(*v1.Deployment); ok {
+			assert.Len(t, dep.Spec.Template.Spec.InitContainers, 0, "expected no init containers")
+			assert.Len(t, dep.Spec.Template.Spec.Containers, 2, "expected 2 regular containers")
+			return
+		}
+	}
+	t.Fatal("no Deployment found in manifests")
+}
+
+func TestConvertWorkload_MixedBefore(t *testing.T) {
+	// Mixed: complete init + started sidecar + regular container
+	var err error
+	state := new(project.State)
+	state, err = state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{"name": "example"},
+		Containers: map[string]scoretypes.Container{
+			"migrate": {
+				Image:   "my-app:latest",
+				Command: []string{"migrate"},
+				Before: scoretypes.ContainerBefore{
+					"app": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyComplete,
+					},
+				},
+			},
+			"sidecar": {
+				Image: "sidecar:latest",
+				Before: scoretypes.ContainerBefore{
+					"app": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyStarted,
+					},
+				},
+			},
+			"app": {
+				Image: "my-app:latest",
+			},
+		},
+	}, nil, project.WorkloadExtras{InstanceSuffix: "-test"})
+	require.NoError(t, err)
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+
+	for _, m := range manifests {
+		if dep, ok := m.(*v1.Deployment); ok {
+			assert.Len(t, dep.Spec.Template.Spec.InitContainers, 2, "expected 2 init containers")
+			assert.Len(t, dep.Spec.Template.Spec.Containers, 1, "expected 1 regular container")
+			assert.Equal(t, "app", dep.Spec.Template.Spec.Containers[0].Name)
+
+			// Check that migrate is init (no restartPolicy) and sidecar has restartPolicy
+			for _, ic := range dep.Spec.Template.Spec.InitContainers {
+				if ic.Name == "migrate" {
+					assert.Nil(t, ic.RestartPolicy, "migrate should not have restartPolicy")
+				} else if ic.Name == "sidecar" {
+					require.NotNil(t, ic.RestartPolicy, "sidecar should have restartPolicy")
+					assert.Equal(t, coreV1.ContainerRestartPolicyAlways, *ic.RestartPolicy)
+				}
+			}
+			return
+		}
+	}
+	t.Fatal("no Deployment found in manifests")
 }

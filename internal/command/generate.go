@@ -147,6 +147,11 @@ manifests. All resources and links between Workloads will be resolved and provis
 			}
 			workloadName := workload.Metadata["name"].(string)
 
+			// Validate before relationships
+			if err := validateContainerBefore(&workload); err != nil {
+				return errors.Wrapf(err, "invalid score file: %s", arg)
+			}
+
 			// Apply image override
 			for containerName, container := range workload.Containers {
 				if container.Image == "." {
@@ -374,4 +379,73 @@ func init() {
 	generateCmd.Flags().Bool(generateCmdGenerateNamespaceFlag, false, "If true, generate a namespace manifest. Requires --namespace to be set")
 
 	rootCmd.AddCommand(generateCmd)
+}
+
+// validateContainerBefore validates before relationships in a workload:
+// - All container names referenced in before entries must exist
+// - A container may not reference itself in a before entry
+// - The before relationships must not contain cycles
+// - ready: healthy is not supported in score-k8s
+func validateContainerBefore(workload *scoretypes.Workload) error {
+	containerNames := make(map[string]struct{}, len(workload.Containers))
+	for name := range workload.Containers {
+		containerNames[name] = struct{}{}
+	}
+
+	errMsgs := []string{}
+
+	// waitingFor maps a container name to the containers it references in its before field.
+	waitingFor := make(map[string][]string)
+	for containerName, container := range workload.Containers {
+		for dep, entry := range container.Before {
+			if dep == containerName {
+				errMsgs = append(errMsgs, fmt.Sprintf("container %q has a self-referencing before entry", containerName))
+				continue
+			}
+			if _, exists := containerNames[dep]; !exists {
+				errMsgs = append(errMsgs, fmt.Sprintf("container %q before refers to unknown container %q", containerName, dep))
+				continue
+			}
+			if entry.Ready == scoretypes.ContainerBeforeReadyHealthy {
+				errMsgs = append(errMsgs, fmt.Sprintf("container %q before %q: ready 'healthy' is not supported in score-k8s, Kubernetes initContainers don't support health-based gating", containerName, dep))
+				continue
+			}
+			waitingFor[containerName] = append(waitingFor[containerName], dep)
+		}
+	}
+
+	// DFS cycle detection using white/gray/black coloring.
+	const (
+		white = 0
+		gray  = 1
+		black = 2
+	)
+	color := make(map[string]int)
+	var dfs func(node string) bool
+	dfs = func(node string) bool {
+		color[node] = gray
+		for _, dep := range waitingFor[node] {
+			if color[dep] == gray {
+				return true
+			}
+			if color[dep] == white {
+				if dfs(dep) {
+					return true
+				}
+			}
+		}
+		color[node] = black
+		return false
+	}
+	for name := range workload.Containers {
+		if color[name] == white && dfs(name) {
+			errMsgs = append(errMsgs, "containers before relationships contain a cycle")
+			break
+		}
+	}
+
+	if len(errMsgs) > 0 {
+		return fmt.Errorf("%s", strings.Join(errMsgs, "; "))
+	}
+	return nil
 }
