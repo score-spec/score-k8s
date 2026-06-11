@@ -120,12 +120,24 @@ manifests. All resources and links between Workloads will be resolved and provis
 		}
 
 		slices.Sort(args)
+		var validationErrors []string
 		for _, arg := range args {
 			var rawWorkload map[string]interface{}
 			if raw, err := os.ReadFile(arg); err != nil {
 				return errors.Wrapf(err, "failed to read input score file: %s", arg)
 			} else if err = yaml.Unmarshal(raw, &rawWorkload); err != nil {
 				return errors.Wrapf(err, "failed to decode input score file: %s", arg)
+			}
+
+			// Early validation: check for missing metadata before schema validation
+			meta, ok := rawWorkload["metadata"].(map[string]interface{})
+			if !ok {
+				validationErrors = append(validationErrors, fmt.Sprintf("workload in file '%s' is missing required metadata", arg))
+				continue
+			}
+			if name, _ := meta["name"].(string); name == "" {
+				validationErrors = append(validationErrors, fmt.Sprintf("workload in file '%s' has empty metadata.name", arg))
+				continue
 			}
 
 			// apply overrides
@@ -188,6 +200,10 @@ manifests. All resources and links between Workloads will be resolved and provis
 				return errors.Wrapf(err, "failed to add score file to project: %s", arg)
 			}
 			slog.Info("Added score file to project", "file", arg)
+		}
+
+		if len(validationErrors) > 0 {
+			return fmt.Errorf("validation failed:\n - %s", strings.Join(validationErrors, "\n - "))
 		}
 
 		if len(state.Workloads) == 0 {
