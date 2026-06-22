@@ -33,6 +33,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/yaml/kyaml"
 
 	"github.com/score-spec/score-k8s/internal"
 	"github.com/score-spec/score-k8s/internal/convert"
@@ -49,6 +50,12 @@ const (
 	generateCmdOutputFlag            = "output"
 	generateCmdNamespaceFlag         = "namespace"
 	generateCmdGenerateNamespaceFlag = "generate-namespace"
+	generateCmdFormatFlag            = "format"
+)
+
+const (
+	outputFormatYaml  = "yaml"
+	outputFormatKyaml = "kyaml"
 )
 
 var generateCmd = &cobra.Command{
@@ -80,7 +87,10 @@ manifests. All resources and links between Workloads will be resolved and provis
   score-k8s generate score.yaml --namespace=test-ns
 
   # Generate namespace manifest and set namespace for all resources
-  score-k8s generate score.yaml --namespace=test-ns --generate-namespace`,
+  score-k8s generate score.yaml --namespace=test-ns --generate-namespace
+
+  # Generate manifests in the KYAML format instead of YAML
+  score-k8s generate score.yaml --format=kyaml`,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
@@ -90,6 +100,11 @@ manifests. All resources and links between Workloads will be resolved and provis
 		namespace, _ := cmd.Flags().GetString(generateCmdNamespaceFlag)
 		if generateNamespace && namespace == "" {
 			return fmt.Errorf("--namespace flag is required when using --generate-namespace")
+		}
+
+		outputFormat, _ := cmd.Flags().GetString(generateCmdFormatFlag)
+		if outputFormat != outputFormatYaml && outputFormat != outputFormatKyaml {
+			return fmt.Errorf("invalid --%s value %q, expected %q or %q", generateCmdFormatFlag, outputFormat, outputFormatYaml, outputFormatKyaml)
 		}
 
 		sd, ok, err := project.LoadStateDirectory(".")
@@ -105,12 +120,24 @@ manifests. All resources and links between Workloads will be resolved and provis
 		}
 
 		slices.Sort(args)
+		var validationErrors []string
 		for _, arg := range args {
 			var rawWorkload map[string]interface{}
 			if raw, err := os.ReadFile(arg); err != nil {
 				return errors.Wrapf(err, "failed to read input score file: %s", arg)
 			} else if err = yaml.Unmarshal(raw, &rawWorkload); err != nil {
 				return errors.Wrapf(err, "failed to decode input score file: %s", arg)
+			}
+
+			// Early validation: check for missing metadata before schema validation
+			meta, ok := rawWorkload["metadata"].(map[string]interface{})
+			if !ok {
+				validationErrors = append(validationErrors, fmt.Sprintf("workload in file '%s' is missing required metadata", arg))
+				continue
+			}
+			if name, _ := meta["name"].(string); name == "" {
+				validationErrors = append(validationErrors, fmt.Sprintf("workload in file '%s' has empty metadata.name", arg))
+				continue
 			}
 
 			// apply overrides
@@ -173,6 +200,10 @@ manifests. All resources and links between Workloads will be resolved and provis
 				return errors.Wrapf(err, "failed to add score file to project: %s", arg)
 			}
 			slog.Info("Added score file to project", "file", arg)
+		}
+
+		if len(validationErrors) > 0 {
+			return fmt.Errorf("validation failed:\n - %s", strings.Join(validationErrors, "\n - "))
 		}
 
 		if len(state.Workloads) == 0 {
@@ -291,11 +322,23 @@ manifests. All resources and links between Workloads will be resolved and provis
 		}
 
 		out := new(bytes.Buffer)
-		for _, manifest := range outputManifests {
-			out.WriteString("---\n")
-			enc := yaml.NewEncoder(out)
-			enc.SetIndent(2)
-			_ = enc.Encode(manifest)
+		if outputFormat == outputFormatKyaml {
+			enc := &kyaml.Encoder{}
+			for _, manifest := range outputManifests {
+				// FromObject writes the "---" document separator itself.
+				if err := enc.FromObject(manifest, out); err != nil {
+					return fmt.Errorf("failed to encode manifest as kyaml: %w", err)
+				}
+			}
+		} else {
+			for _, manifest := range outputManifests {
+				out.WriteString("---\n")
+				enc := yaml.NewEncoder(out)
+				enc.SetIndent(2)
+				if err := enc.Encode(manifest); err != nil {
+					return fmt.Errorf("failed to encode manifest as yaml: %w", err)
+				}
+			}
 		}
 		v, _ := cmd.Flags().GetString(generateCmdOutputFlag)
 		if v == "" {
@@ -367,6 +410,7 @@ func buildManifestSignature(n map[string]interface{}) string {
 
 func init() {
 	generateCmd.Flags().StringP(generateCmdOutputFlag, "o", "manifests.yaml", "The output manifests file to write the manifests to")
+	generateCmd.Flags().String(generateCmdFormatFlag, outputFormatYaml, "The output format for the manifests: 'yaml' or 'kyaml'")
 	generateCmd.Flags().String(generateCmdOverridesFileFlag, "", "An optional file of Score overrides to merge in")
 	generateCmd.Flags().StringArray(generateCmdOverridePropertyFlag, []string{}, "An optional set of path=key overrides to set or remove")
 	generateCmd.Flags().StringP(generateCmdImageFlag, "i", "", "An optional container image to use for any container with image == '.'")

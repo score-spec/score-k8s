@@ -17,6 +17,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/score-spec/score-k8s/internal/project"
 )
@@ -81,7 +83,7 @@ func TestInitAndGenerateWithBadScore(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filepath.Join(td, "thing"), []byte(`{}`), 0644))
 
 	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{"generate", "thing"})
-	assert.EqualError(t, err, "invalid score file: thing: jsonschema: '' does not validate with https://score.dev/schemas/score#/required: missing properties: 'apiVersion', 'metadata', 'containers'")
+	assert.EqualError(t, err, "validation failed:\n - workload in file 'thing' is missing required metadata")
 	assert.Equal(t, "", stdout)
 }
 
@@ -547,4 +549,73 @@ spec:
   selector:
     app.kubernetes.io/instance: example%[1]s
 `, sd.State.Workloads["example"].Extras.InstanceSuffix))
+}
+
+func TestGenerateWithKyamlFormat(t *testing.T) {
+	td := changeToTempDir(t)
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+	assert.Equal(t, "", stdout)
+
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: nginx:latest`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml",
+		"--format", "kyaml",
+		"--", "score.yaml",
+	})
+	require.NoError(t, err)
+
+	raw, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
+	require.NoError(t, err)
+	content := string(raw)
+
+	// KYAML wraps mappings in braces and always double-quotes string values,
+	// which is what sets it apart from the default YAML output.
+	assert.Contains(t, content, `kind: "Deployment"`)
+	assert.Contains(t, content, `apiVersion: "apps/v1"`)
+	assert.Contains(t, content, "{")
+
+	// KYAML is still valid YAML, so every emitted document must parse cleanly.
+	decoder := yaml.NewDecoder(strings.NewReader(content))
+	docCount := 0
+	for {
+		var doc map[string]interface{}
+		decErr := decoder.Decode(&doc)
+		if decErr == io.EOF {
+			break
+		}
+		require.NoError(t, decErr)
+		if doc != nil {
+			docCount++
+		}
+	}
+	assert.Positive(t, docCount)
+}
+
+func TestGenerateWithInvalidFormat(t *testing.T) {
+	td := changeToTempDir(t)
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+	assert.Equal(t, "", stdout)
+
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: nginx:latest`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml",
+		"--format", "json",
+		"--", "score.yaml",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `invalid --format value "json"`)
 }

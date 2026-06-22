@@ -154,10 +154,14 @@ Examples:
   # Generate namespace manifest and set namespace for all resources
   score-k8s generate score.yaml --namespace=test-ns --generate-namespace
 
+  # Generate manifests in the KYAML format instead of YAML
+  score-k8s generate score.yaml --format=kyaml
+
 Flags:
   -h, --help                            help for generate
       --image string                    An optional container image to use for any container with image == '.'
   -o, --output string                   The output manifests file to write the manifests to (default "manifests.yaml")
+      --format string                   The output format for the manifests: 'yaml' or 'kyaml' (default "yaml")
       --override-property stringArray   An optional set of path=key overrides to set or remove
       --overrides-file string           An optional file of Score overrides to merge in
       --namespace string               An optional namespace to set for all generated resources
@@ -263,6 +267,18 @@ score-k8s generate score.yaml --namespace=test-ns
 # Generate namespace manifest and set namespace for all resources
 score-k8s generate score.yaml --namespace=test-ns --generate-namespace
 ```
+
+### How do I generate KYAML instead of YAML?
+
+[KYAML](https://kubernetes.io/blog/2025/07/28/kubernetes-v1-34-sneak-peek/#support-for-kyaml-a-kubernetes-dialect-of-yaml) is a stricter, less ambiguous subset of YAML designed for Kubernetes. Because every KYAML file is also valid YAML, it can still be passed to any version of `kubectl`.
+
+By default `score-k8s generate` writes standard YAML. Pass `--format kyaml` to write the same manifests as KYAML instead:
+
+```bash
+score-k8s generate score.yaml --format=kyaml
+```
+
+The output file name is unchanged (`manifests.yaml` by default); use `-o` if you'd prefer a different name such as `manifests.kyaml`.
 
 ### How do I modify the generated manifests or add and remove from them?
 
