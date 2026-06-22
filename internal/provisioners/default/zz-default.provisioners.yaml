@@ -1442,31 +1442,39 @@
             automountServiceAccountToken: false
             containers:
             - name: kafka
-              image: bitnami/kafka:latest
+              image: apache/kafka:latest
               ports:
               - name: kafka
                 containerPort: {{ .Init.brokerPort }}
               env:
-              - name: KAFKA_CFG_NODE_ID
-                value: "0"
-              - name: KAFKA_CFG_PROCESS_ROLES
-                value: controller,broker
-              - name: KAFKA_CFG_LISTENERS
+              - name: KAFKA_NODE_ID
+                value: "1"
+              - name: KAFKA_PROCESS_ROLES
+                value: broker,controller
+              - name: KAFKA_LISTENERS
                 value: "PLAINTEXT://:{{ .Init.brokerPort }},CONTROLLER://:{{ .Init.ctrlPort }}"
-              - name: KAFKA_CFG_ADVERTISED_LISTENERS
+              - name: KAFKA_ADVERTISED_LISTENERS
                 value: "PLAINTEXT://{{ $broker }}:{{ .Init.brokerPort }}"
-              - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+              - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
                 value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
-              - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
-                value: "0@{{ $broker }}:{{ .Init.ctrlPort }}"
-              - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
+              - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+                value: "1@{{ $broker }}:{{ .Init.ctrlPort }}"
+              - name: KAFKA_CONTROLLER_LISTENER_NAMES
                 value: CONTROLLER
-              - name: KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE
+              - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
                 value: "false"
+              - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+                value: "1"
+              - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+                value: "1"
+              - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+                value: "1"
+              - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+                value: "0"
               readinessProbe:
                 exec:
                   command:
-                    - kafka-topics.sh
+                    - /opt/kafka/bin/kafka-topics.sh
                     - --list
                     - --bootstrap-server=localhost:{{ .Init.brokerPort }}
                 initialDelaySeconds: 10
@@ -1480,9 +1488,12 @@
                     - ALL
               volumeMounts:
               - name: kafka-data
-                mountPath: /bitnami/kafka
+                mountPath: /var/lib/kafka/data
             securityContext:
+              fsGroup: 1000
+              runAsGroup: 1000
               runAsNonRoot: true
+              runAsUser: 1000
               seccompProfile:
                 type: RuntimeDefault
         volumeClaimTemplates:
@@ -1551,15 +1562,15 @@
             automountServiceAccountToken: false
             containers:
             - name: kafka-topic-init
-              image: bitnami/kafka:latest
+              image: apache/kafka:latest
               command:
               - /bin/sh
               - -c
               - |
-                kafka-topics.sh \
+                /opt/kafka/bin/kafka-topics.sh \
                   --bootstrap-server={{ $broker }}:{{ .Init.brokerPort }} \
                   --describe --topic={{ .State.topic }} \
-                || kafka-topics.sh \
+                || /opt/kafka/bin/kafka-topics.sh \
                   --bootstrap-server={{ $broker }}:{{ .Init.brokerPort }} \
                   --create \
                   --topic={{ .State.topic }} \
