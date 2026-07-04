@@ -1388,3 +1388,206 @@
     - region
     - aws_access_key_id
     - aws_secret_key
+
+- uri: template://default-provisioners/kafka-topic
+  type: kafka-topic
+  description: Provisions a dedicated Kafka topic on an in-cluster Kafka broker.
+  init: |
+    brokerPort: 9092
+    ctrlPort: 9093
+    randomTopic: topic-{{ randAlphaNum 6 }}
+  state: |
+    topic: {{ dig "topic" .Init.randomTopic .State | quote }}
+  shared: |
+    shared_kafka_instance_name: {{ dig "shared_kafka_instance_name" (print "kafka-" (randAlphaNum 6)) .Shared | quote }}
+  outputs: |
+    host: {{ .Shared.shared_kafka_instance_name }}
+    port: {{ .Init.brokerPort }}
+    name: {{ .State.topic }}
+    num_partitions: 3
+  manifests: |
+    {{ $broker := .Shared.shared_kafka_instance_name }}
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: {{ $broker }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ $broker }}
+          app.kubernetes.io/instance: {{ $broker }}
+      spec:
+        replicas: 1
+        serviceName: {{ $broker }}
+        selector:
+          matchLabels:
+            app.kubernetes.io/instance: {{ $broker }}
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ $broker }}
+              app.kubernetes.io/instance: {{ $broker }}
+            annotations:
+              k8s.score.dev/source-workload: {{ .SourceWorkload }}
+              k8s.score.dev/resource-uid: {{ .Uid }}
+              k8s.score.dev/resource-guid: {{ .Guid }}
+          spec:
+            automountServiceAccountToken: false
+            containers:
+            - name: kafka
+              image: apache/kafka:latest
+              ports:
+              - name: kafka
+                containerPort: {{ .Init.brokerPort }}
+              env:
+              - name: KAFKA_NODE_ID
+                value: "1"
+              - name: KAFKA_PROCESS_ROLES
+                value: broker,controller
+              - name: KAFKA_LISTENERS
+                value: "PLAINTEXT://:{{ .Init.brokerPort }},CONTROLLER://:{{ .Init.ctrlPort }}"
+              - name: KAFKA_ADVERTISED_LISTENERS
+                value: "PLAINTEXT://{{ $broker }}:{{ .Init.brokerPort }}"
+              - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+                value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+              - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+                value: "1@{{ $broker }}:{{ .Init.ctrlPort }}"
+              - name: KAFKA_CONTROLLER_LISTENER_NAMES
+                value: CONTROLLER
+              - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+                value: "false"
+              - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+                value: "1"
+              - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+                value: "1"
+              - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+                value: "1"
+              - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+                value: "0"
+              readinessProbe:
+                exec:
+                  command:
+                    - /opt/kafka/bin/kafka-topics.sh
+                    - --list
+                    - --bootstrap-server=localhost:{{ .Init.brokerPort }}
+                initialDelaySeconds: 10
+                periodSeconds: 5
+                failureThreshold: 12
+              securityContext:
+                allowPrivilegeEscalation: false
+                privileged: false
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+              - name: kafka-data
+                mountPath: /var/lib/kafka/data
+            securityContext:
+              fsGroup: 1000
+              runAsGroup: 1000
+              runAsNonRoot: true
+              runAsUser: 1000
+              seccompProfile:
+                type: RuntimeDefault
+        volumeClaimTemplates:
+        - metadata:
+            name: kafka-data
+            annotations:
+              k8s.score.dev/source-workload: {{ .SourceWorkload }}
+              k8s.score.dev/resource-uid: {{ .Uid }}
+              k8s.score.dev/resource-guid: {{ .Guid }}
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ $broker }}
+              app.kubernetes.io/instance: {{ $broker }}
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 1Gi
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{ $broker }}
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ $broker }}
+          app.kubernetes.io/instance: {{ $broker }}
+      spec:
+        selector:
+          app.kubernetes.io/instance: {{ $broker }}
+        type: ClusterIP
+        ports:
+        - port: {{ .Init.brokerPort }}
+          targetPort: {{ .Init.brokerPort }}
+    - apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: {{ $broker }}-{{ .State.topic | replace "." "-" }}-init
+        {{ if ne .Namespace "" }}
+        namespace: {{ .Namespace }}
+        {{ end }}
+        annotations:
+          k8s.score.dev/source-workload: {{ .SourceWorkload }}
+          k8s.score.dev/resource-uid: {{ .Uid }}
+          k8s.score.dev/resource-guid: {{ .Guid }}
+        labels:
+          app.kubernetes.io/managed-by: score-k8s
+          app.kubernetes.io/name: {{ $broker }}-{{ .State.topic | replace "." "-" }}-init
+          app.kubernetes.io/instance: {{ $broker }}
+      spec:
+        backoffLimit: 10
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/managed-by: score-k8s
+              app.kubernetes.io/name: {{ $broker }}-{{ .State.topic | replace "." "-" }}-init
+              app.kubernetes.io/instance: {{ $broker }}
+          spec:
+            restartPolicy: OnFailure
+            automountServiceAccountToken: false
+            containers:
+            - name: kafka-topic-init
+              image: apache/kafka:latest
+              command:
+              - /bin/sh
+              - -c
+              - |
+                /opt/kafka/bin/kafka-topics.sh \
+                  --bootstrap-server={{ $broker }}:{{ .Init.brokerPort }} \
+                  --describe --topic={{ .State.topic }} \
+                || /opt/kafka/bin/kafka-topics.sh \
+                  --bootstrap-server={{ $broker }}:{{ .Init.brokerPort }} \
+                  --create \
+                  --topic={{ .State.topic }} \
+                  --partitions=3 \
+                  --replication-factor=1
+              securityContext:
+                allowPrivilegeEscalation: false
+                privileged: false
+                capabilities:
+                  drop:
+                    - ALL
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+  expected_outputs:
+    - host
+    - port
+    - name
+    - num_partitions
