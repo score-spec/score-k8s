@@ -66,6 +66,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 	volumeClaimTemplates := make([]coreV1.PersistentVolumeClaim, 0)
 
 	containers := make([]coreV1.Container, 0, len(spec.Containers))
+	initContainers := make([]coreV1.Container, 0)
 	containerNames := make([]string, 0, len(spec.Containers))
 	for name := range spec.Containers {
 		containerNames = append(containerNames, name)
@@ -162,7 +163,17 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			}
 		}
 
-		containers = append(containers, c)
+		// Classify container based on before entries
+		switch classifyContainer(container) {
+		case containerClassInit:
+			initContainers = append(initContainers, c)
+		case containerClassSidecar:
+			restartAlways := coreV1.ContainerRestartPolicyAlways
+			c.RestartPolicy = &restartAlways
+			initContainers = append(initContainers, c)
+		default:
+			containers = append(containers, c)
+		}
 	}
 
 	// We want to apply the annotations from the workload onto the pod.
@@ -227,8 +238,9 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 						Annotations: podAnnotations,
 					},
 					Spec: coreV1.PodSpec{
-						Containers: containers,
-						Volumes:    volumes,
+						InitContainers: initContainers,
+						Containers:     containers,
+						Volumes:        volumes,
 					},
 				},
 			},
@@ -273,8 +285,9 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 						Annotations: podAnnotations,
 					},
 					Spec: coreV1.PodSpec{
-						Containers: containers,
-						Volumes:    volumes,
+						InitContainers: initContainers,
+						Containers:     containers,
+						Volumes:        volumes,
 					},
 				},
 				// So the puzzle here is how to get this from our volumes...
@@ -319,6 +332,39 @@ func buildProbe(probe *scoretypes.ContainerProbe) (*coreV1.Probe, error) {
 		}}, nil
 	}
 	return nil, fmt.Errorf("either httpGet or exec must be defined")
+}
+
+// containerClass represents the classification of a container.
+type containerClass int
+
+const (
+	// containerClassRegular is a normal container in spec.containers.
+	containerClassRegular containerClass = iota
+	// containerClassInit is an init container that runs to completion (ready: complete).
+	containerClassInit
+	// containerClassSidecar is an init container with restartPolicy: Always (ready: started).
+	containerClassSidecar
+)
+
+// classifyContainer determines whether a container should be placed in
+// initContainers or regular containers based on its before entries.
+func classifyContainer(c scoretypes.Container) containerClass {
+	if len(c.Before) == 0 {
+		return containerClassRegular
+	}
+	hasStarted := false
+	for _, entry := range c.Before {
+		switch entry.Ready {
+		case scoretypes.ContainerBeforeReadyStarted:
+			hasStarted = true
+		case scoretypes.ContainerBeforeReadyComplete:
+			// init container
+		}
+	}
+	if hasStarted {
+		return containerClassSidecar
+	}
+	return containerClassInit
 }
 
 // buildPodAnnotations builds the annotations map for a pod by copying the workload annotations
