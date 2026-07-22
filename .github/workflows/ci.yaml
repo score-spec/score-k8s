@@ -96,7 +96,7 @@ jobs:
         id: docker_oidc
         uses: docker/oidc-action@3f002d200df5620744c973221788e401898c6f86 # v1.0.0
         with:
-          connection_id: ${{ secrets.DOCKER_HUB_CI_OIDC_CONNECTION_ID }} # Docker Hub OIDC connection ID configured in repo secrets
+          connection_id: ${{ secrets.DOCKER_HUB_CI_OIDC_CONNECTION_ID }} # OIDC connection ID from Docker Hub org security settings
       - name: docker login docker.io
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
