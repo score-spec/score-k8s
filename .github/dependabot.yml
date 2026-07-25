@@ -3,7 +3,7 @@ registries:
   dhi:
     type: docker-registry
     url: dhi.io
-    username: ${{ vars.DOCKER_HUB_ORG }}
+    username: ${{ secrets.DOCKER_HUB_USERNAME }}
     password: ${{ secrets.DOCKER_HUB_TOKEN }}
 updates:
   - package-ecosystem: "github-actions"
