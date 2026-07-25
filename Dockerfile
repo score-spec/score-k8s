@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM dhi.io/golang:1.26.5-alpine3.24-dev@sha256:711ea0b8f09f549c50f2f550dc26859d3e6441ca11d5640caecf69c29a862f0c AS builder
+FROM --platform=$BUILDPLATFORM dhi.io/golang:1.26.5-alpine3.24-dev@sha256:29fe0a7d2a5ab0c236fbde3a7f63801755585ed260b6f2f564e831c92bfa9f34 AS builder
 
 ARG VERSION=0.0.0
 ARG GIT_COMMIT=unknown
