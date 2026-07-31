@@ -80,6 +80,11 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 
 	for _, containerName := range containerNames {
 		container := spec.Containers[containerName]
+
+		if container.Image, err = framework.SubstituteString(container.Image, sf); err != nil {
+			return nil, errors.Wrapf(err, "containers.%s.image: failed to substitute placeholders", containerName)
+		}
+
 		c := coreV1.Container{
 			Name:         containerName,
 			Image:        container.Image,
