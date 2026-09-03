@@ -23,6 +23,8 @@ import (
 	scoretypes "github.com/score-spec/score-go/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/apps/v1"
+	machineryMeta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/score-spec/score-k8s/internal"
@@ -255,4 +257,76 @@ spec:
 status: {}
 ---
 `, out.String())
+}
+
+func TestConvertWorkload_image_placeholders(t *testing.T) {
+	buildState := func(t *testing.T, image string) *project.State {
+		state := new(project.State)
+		state, err := state.WithWorkload(&scoretypes.Workload{
+			Metadata: map[string]interface{}{
+				"name": "example",
+				"annotations": map[string]interface{}{
+					"my.custom.scope/revision": "abc123",
+				},
+			},
+			Containers: map[string]scoretypes.Container{
+				"c1": {Image: image},
+			},
+			Resources: map[string]scoretypes.Resource{
+				"img": {Type: "image-ref", Class: internal.Ref("default")},
+			},
+		}, nil, project.WorkloadExtras{InstanceSuffix: "-abcdef"})
+		require.NoError(t, err)
+		state.Resources = map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
+			"image-ref.default#example.img": {
+				Type:    "image-ref",
+				Class:   "default",
+				Outputs: map[string]interface{}{"image": "registry.example.com/thing:v2"},
+			},
+		}
+		return state
+	}
+
+	firstContainerImage := func(t *testing.T, manifests []machineryMeta.Object) string {
+		for _, manifest := range manifests {
+			if d, ok := manifest.(*v1.Deployment); ok {
+				require.Len(t, d.Spec.Template.Spec.Containers, 1)
+				return d.Spec.Template.Spec.Containers[0].Image
+			}
+		}
+		t.Fatal("no deployment found")
+		return ""
+	}
+
+	for _, tc := range []struct {
+		Name          string
+		Image         string
+		Expected      string
+		ExpectedError string
+	}{
+		{Name: "no placeholder", Image: "nginx:latest", Expected: "nginx:latest"},
+		{Name: "metadata ref", Image: "registry.example.com/${metadata.name}:latest", Expected: "registry.example.com/example:latest"},
+		{
+			Name:     "annotation ref",
+			Image:    `registry.example.com/${metadata.name}:${metadata.annotations.my\.custom\.scope/revision}`,
+			Expected: "registry.example.com/example:abc123",
+		},
+		{Name: "resource output ref", Image: "${resources.img.image}", Expected: "registry.example.com/thing:v2"},
+		{Name: "escaped dollar", Image: "registry.example.com/thing:$${not.a.ref}", Expected: "registry.example.com/thing:${not.a.ref}"},
+		{
+			Name:          "unknown resource",
+			Image:         "${resources.nope.image}",
+			ExpectedError: "containers.c1.image: failed to substitute placeholders: invalid ref 'resources.nope.image': no known resource 'nope'",
+		},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			manifests, err := ConvertWorkload(buildState(t, tc.Image), "example")
+			if tc.ExpectedError != "" {
+				assert.EqualError(t, err, tc.ExpectedError)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.Expected, firstContainerImage(t, manifests))
+		})
+	}
 }
