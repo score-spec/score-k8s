@@ -23,6 +23,7 @@ import (
 	scoretypes "github.com/score-spec/score-go/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/score-spec/score-k8s/internal"
@@ -255,4 +256,66 @@ spec:
 status: {}
 ---
 `, out.String())
+}
+
+// TestSharedVolumeAcrossContainers reproduces https://github.com/score-spec/score-k8s/issues/363:
+// when two containers mount the same volume resource at the same path (e.g. an init container
+// staging files into an emptyDir that the main container reads), the pod-level volume list must
+// contain that volume only once, otherwise Kubernetes rejects the pod with a "Duplicate value" error.
+func TestSharedVolumeAcrossContainers(t *testing.T) {
+	state := new(project.State)
+	state, err := state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{"name": "example"},
+		Containers: map[string]scoretypes.Container{
+			"main": {
+				Image: "main-image",
+				Volumes: map[string]scoretypes.ContainerVolume{
+					"/data": {Source: "${resources.vol}"},
+				},
+			},
+			"init": {
+				Image: "init-image",
+				Volumes: map[string]scoretypes.ContainerVolume{
+					"/data": {Source: "${resources.vol}"},
+				},
+			},
+		},
+		Resources: map[string]scoretypes.Resource{
+			"vol": {Type: "vol", Class: internal.Ref("default")},
+		},
+	}, nil, project.WorkloadExtras{})
+	require.NoError(t, err)
+	state.Resources = map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
+		"vol.default#example.vol": {
+			Type:  "vol",
+			Class: "default",
+			Outputs: map[string]interface{}{
+				"source": map[string]interface{}{"emptyDir": map[string]interface{}{}},
+			},
+		},
+	}
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+
+	var deployment *v1.Deployment
+	for _, m := range manifests {
+		if d, ok := m.(*v1.Deployment); ok {
+			deployment = d
+		}
+	}
+	require.NotNil(t, deployment)
+
+	volumes := deployment.Spec.Template.Spec.Volumes
+	require.Len(t, volumes, 1, "shared volume must be collapsed into a single pod-level volume")
+
+	// Both containers must reference that single volume by name.
+	names := make([]string, 0, len(volumes))
+	for _, v := range volumes {
+		names = append(names, v.Name)
+	}
+	for _, c := range deployment.Spec.Template.Spec.Containers {
+		require.Len(t, c.VolumeMounts, 1)
+		assert.Contains(t, names, c.VolumeMounts[0].Name)
+	}
 }
