@@ -16,10 +16,10 @@ package convert
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"slices"
-	"crypto/sha256"
 
 	"github.com/pkg/errors"
 	"github.com/score-spec/score-go/framework"
@@ -188,4 +188,39 @@ func collapseVolumeMounts(volumes []coreV1.Volume, mounts []coreV1.VolumeMount) 
 	}
 
 	return outputVols, outputMounts, nil
+}
+
+// dedupeVolumesByName keeps the first volume for each name so a Score volume
+// shared across containers appears once in pod.spec.volumes.
+func dedupeVolumesByName(volumes []coreV1.Volume) []coreV1.Volume {
+	if len(volumes) < 2 {
+		return volumes
+	}
+	seen := make(map[string]struct{}, len(volumes))
+	out := make([]coreV1.Volume, 0, len(volumes))
+	for _, vol := range volumes {
+		if _, ok := seen[vol.Name]; ok {
+			continue
+		}
+		seen[vol.Name] = struct{}{}
+		out = append(out, vol)
+	}
+	return out
+}
+
+// dedupeVolumeClaimTemplatesByName keeps the first PVC template for each name.
+func dedupeVolumeClaimTemplatesByName(claims []coreV1.PersistentVolumeClaim) []coreV1.PersistentVolumeClaim {
+	if len(claims) < 2 {
+		return claims
+	}
+	seen := make(map[string]struct{}, len(claims))
+	out := make([]coreV1.PersistentVolumeClaim, 0, len(claims))
+	for _, claim := range claims {
+		if _, ok := seen[claim.Name]; ok {
+			continue
+		}
+		seen[claim.Name] = struct{}{}
+		out = append(out, claim)
+	}
+	return out
 }

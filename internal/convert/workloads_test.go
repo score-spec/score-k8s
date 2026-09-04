@@ -23,6 +23,7 @@ import (
 	scoretypes "github.com/score-spec/score-go/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/score-spec/score-k8s/internal"
@@ -255,4 +256,64 @@ spec:
 status: {}
 ---
 `, out.String())
+}
+
+func TestConvertWorkload_sharedVolumeAcrossContainers(t *testing.T) {
+	var err error
+	state := new(project.State)
+	state, err = state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{"name": "shared-vol"},
+		Containers: map[string]scoretypes.Container{
+			"main": {
+				Image:   "busybox",
+				Command: []string{"sh", "-c", "sleep 3600"},
+				Volumes: map[string]scoretypes.ContainerVolume{
+					"/data": {Source: "${resources.data}"},
+				},
+			},
+			"init": {
+				Image:   "busybox",
+				Command: []string{"sh", "-c", "echo hi > /data/f"},
+				Volumes: map[string]scoretypes.ContainerVolume{
+					"/data": {Source: "${resources.data}"},
+				},
+			},
+		},
+		Resources: map[string]scoretypes.Resource{
+			"data": {Type: "volume"},
+		},
+	}, nil, project.WorkloadExtras{InstanceSuffix: "-abcdef"})
+	require.NoError(t, err)
+	state.Resources = map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
+		"volume.default#shared-vol.data": {
+			Type:  "volume",
+			Class: "default",
+			Id:    "",
+			Outputs: map[string]interface{}{
+				"source": map[string]interface{}{
+					"emptyDir": map[string]interface{}{},
+				},
+			},
+		},
+	}
+
+	manifests, err := ConvertWorkload(state, "shared-vol")
+	require.NoError(t, err)
+	require.Len(t, manifests, 1)
+
+	dep, ok := manifests[0].(*appsv1.Deployment)
+	require.True(t, ok, "expected Deployment")
+
+	vols := dep.Spec.Template.Spec.Volumes
+	require.Len(t, vols, 1, "shared volume must appear once at pod level")
+	assert.Equal(t, "vol-bd47413b5c", vols[0].Name)
+	assert.NotNil(t, vols[0].EmptyDir)
+
+	containers := dep.Spec.Template.Spec.Containers
+	require.Len(t, containers, 2)
+	for _, c := range containers {
+		require.Len(t, c.VolumeMounts, 1, "container %s should mount the shared volume", c.Name)
+		assert.Equal(t, vols[0].Name, c.VolumeMounts[0].Name)
+		assert.Equal(t, "/data", c.VolumeMounts[0].MountPath)
+	}
 }

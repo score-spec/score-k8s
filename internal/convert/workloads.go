@@ -165,6 +165,12 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		containers = append(containers, c)
 	}
 
+	// Pod-level volume names must be unique. The same Score volume resource can be
+	// mounted by multiple containers (e.g. init + main), which produces identical
+	// volume entries when accumulated per-container — keep the first occurrence.
+	volumes = dedupeVolumesByName(volumes)
+	volumeClaimTemplates = dedupeVolumeClaimTemplatesByName(volumeClaimTemplates)
+
 	// We want to apply the annotations from the workload onto the pod.
 	// See the doc of buildPodAnnotations for what gets included here.
 	podAnnotations := buildPodAnnotations(spec.Metadata)

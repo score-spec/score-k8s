@@ -218,3 +218,29 @@ func Test_collapseVolumeMounts_nominal(t *testing.T) {
 		{Name: "v4", MountPath: "/c"},
 	}, mounts)
 }
+
+func Test_dedupeVolumesByName(t *testing.T) {
+	vols := []coreV1.Volume{
+		{Name: "vol-a", VolumeSource: coreV1.VolumeSource{EmptyDir: &coreV1.EmptyDirVolumeSource{}}},
+		{Name: "vol-b", VolumeSource: coreV1.VolumeSource{EmptyDir: &coreV1.EmptyDirVolumeSource{}}},
+		{Name: "vol-a", VolumeSource: coreV1.VolumeSource{EmptyDir: &coreV1.EmptyDirVolumeSource{}}},
+	}
+	got := dedupeVolumesByName(vols)
+	assert.Equal(t, []coreV1.Volume{
+		{Name: "vol-a", VolumeSource: coreV1.VolumeSource{EmptyDir: &coreV1.EmptyDirVolumeSource{}}},
+		{Name: "vol-b", VolumeSource: coreV1.VolumeSource{EmptyDir: &coreV1.EmptyDirVolumeSource{}}},
+	}, got)
+}
+
+func Test_dedupeVolumeClaimTemplatesByName(t *testing.T) {
+	claims := []coreV1.PersistentVolumeClaim{
+		{ObjectMeta: v1.ObjectMeta{Name: "vol-a"}},
+		{ObjectMeta: v1.ObjectMeta{Name: "vol-b"}},
+		{ObjectMeta: v1.ObjectMeta{Name: "vol-a"}},
+	}
+	got := dedupeVolumeClaimTemplatesByName(claims)
+	assert.Equal(t, []coreV1.PersistentVolumeClaim{
+		{ObjectMeta: v1.ObjectMeta{Name: "vol-a"}},
+		{ObjectMeta: v1.ObjectMeta{Name: "vol-b"}},
+	}, got)
+}
