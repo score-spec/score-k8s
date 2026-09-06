@@ -17,6 +17,7 @@ package convert
 import (
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -149,7 +150,15 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 			return nil, errors.Wrapf(err, "containers.%s.volumes: failed to combine projected volumes", containerName)
 		}
 		c.VolumeMounts = containerVolumeMounts
-		volumes = append(volumes, containerVolumes...)
+		// collapseVolumeMounts only dedupes within a single container, but the pod-level
+		// volume list is shared across all containers. A volume referenced by more than one
+		// container (e.g. an init container staging files into an emptyDir the main container
+		// reads) must appear only once here, otherwise Kubernetes rejects the pod with a
+		// "Duplicate value" error on spec.template.spec.volumes.
+		volumes, err = appendPodVolumes(volumes, containerVolumes)
+		if err != nil {
+			return nil, errors.Wrapf(err, "containers.%s.volumes", containerName)
+		}
 
 		if container.LivenessProbe != nil {
 			if c.LivenessProbe, err = buildProbe(container.LivenessProbe); err != nil {
@@ -284,6 +293,24 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 	}
 
 	return manifests, nil
+}
+
+// appendPodVolumes adds the given container-level volumes to the pod-level volume list,
+// collapsing volumes that are shared across containers. Volume names are deterministic
+// (derived from the mount target or resource), so a volume mounted by multiple containers
+// yields the same name each time; it must be emitted only once. A name that maps to two
+// genuinely different volume definitions is a conflict and returns an error.
+func appendPodVolumes(volumes []coreV1.Volume, additions []coreV1.Volume) ([]coreV1.Volume, error) {
+	for _, add := range additions {
+		if i := slices.IndexFunc(volumes, func(v coreV1.Volume) bool { return v.Name == add.Name }); i >= 0 {
+			if !reflect.DeepEqual(volumes[i], add) {
+				return nil, errors.Errorf("volume '%s' is mounted by multiple containers with conflicting definitions", add.Name)
+			}
+			continue
+		}
+		volumes = append(volumes, add)
+	}
+	return volumes, nil
 }
 
 func WorkloadServiceName(workloadName string, specMetadata map[string]interface{}) string {
