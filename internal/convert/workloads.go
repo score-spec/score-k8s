@@ -185,6 +185,10 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 		}
 	}
 
+	// Kubernetes starts init containers sequentially in the order they appear in the list, so the
+	// before relationships have to be reflected in the slice order for chains like initA -> initB -> main.
+	initContainers = orderInitContainers(initContainers, spec.Containers)
+
 	// We want to apply the annotations from the workload onto the pod.
 	// See the doc of buildPodAnnotations for what gets included here.
 	podAnnotations := buildPodAnnotations(spec.Metadata)
@@ -392,6 +396,70 @@ func classifyContainer(c scoretypes.Container) containerClass {
 		return containerClassSidecar
 	}
 	return containerClassInit
+}
+
+// orderInitContainers sorts init containers so that a container which must start before another
+// appears earlier in the list. Kubernetes runs init containers sequentially in list order, so a
+// chain like initA -> initB -> main is only honoured if initA is listed before initB. Containers
+// with no ordering constraint between them keep their existing alphabetical order, so the
+// generated manifests stay deterministic.
+//
+// Cycles are rejected earlier during validation, but this function degrades gracefully if it ever
+// sees one: any container it cannot place is appended in its original order rather than dropped.
+func orderInitContainers(initContainers []coreV1.Container, specContainers map[string]scoretypes.Container) []coreV1.Container {
+	if len(initContainers) < 2 {
+		return initContainers
+	}
+
+	byName := make(map[string]coreV1.Container, len(initContainers))
+	order := make([]string, 0, len(initContainers))
+	for _, c := range initContainers {
+		byName[c.Name] = c
+		order = append(order, c.Name)
+	}
+
+	// Edge name -> dep means name must start before dep. Only edges between two init containers
+	// constrain the list order, since every init container already runs before every regular one.
+	waitingOn := make(map[string]int, len(order))
+	blocks := make(map[string][]string, len(order))
+	for _, name := range order {
+		for dep := range specContainers[name].Before {
+			if _, ok := byName[dep]; !ok || dep == name {
+				continue
+			}
+			blocks[name] = append(blocks[name], dep)
+			waitingOn[dep]++
+		}
+	}
+
+	// Kahn's algorithm, walking `order` each round so ties are broken by the original
+	// alphabetical order instead of by map iteration order.
+	sorted := make([]coreV1.Container, 0, len(initContainers))
+	placed := make(map[string]bool, len(order))
+	for len(sorted) < len(order) {
+		progressed := false
+		for _, name := range order {
+			if placed[name] || waitingOn[name] > 0 {
+				continue
+			}
+			placed[name] = true
+			progressed = true
+			sorted = append(sorted, byName[name])
+			for _, dep := range blocks[name] {
+				waitingOn[dep]--
+			}
+		}
+		if !progressed {
+			// Unreachable for a validated workload; keep every container rather than dropping any.
+			for _, name := range order {
+				if !placed[name] {
+					sorted = append(sorted, byName[name])
+				}
+			}
+			break
+		}
+	}
+	return sorted
 }
 
 // buildPodAnnotations builds the annotations map for a pod by copying the workload annotations

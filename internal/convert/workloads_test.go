@@ -486,3 +486,196 @@ func TestSharedVolumeAcrossContainers(t *testing.T) {
 		assert.Contains(t, names, c.VolumeMounts[0].Name)
 	}
 }
+
+func TestConvertWorkload_BeforeChain(t *testing.T) {
+	// Multiple levels of dependencies: initA -> initB -> main. Kubernetes runs init containers
+	// sequentially in list order, so initA must be listed before initB.
+	var err error
+	state := new(project.State)
+	state, err = state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{"name": "example"},
+		Containers: map[string]scoretypes.Container{
+			"init-a": {
+				Image: "init-a:latest",
+				Before: scoretypes.ContainerBefore{
+					"init-b": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyComplete,
+					},
+				},
+			},
+			"init-b": {
+				Image: "init-b:latest",
+				Before: scoretypes.ContainerBefore{
+					"main": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyComplete,
+					},
+				},
+			},
+			"main": {
+				Image: "my-app:latest",
+			},
+		},
+	}, nil, project.WorkloadExtras{InstanceSuffix: "-test"})
+	require.NoError(t, err)
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+
+	for _, m := range manifests {
+		if dep, ok := m.(*v1.Deployment); ok {
+			names := initContainerNames(dep)
+			assert.Equal(t, []string{"init-a", "init-b"}, names, "init containers must run in dependency order")
+
+			assert.Len(t, dep.Spec.Template.Spec.Containers, 1, "expected 1 regular container")
+			assert.Equal(t, "main", dep.Spec.Template.Spec.Containers[0].Name)
+			return
+		}
+	}
+	t.Fatal("no Deployment found in manifests")
+}
+
+func TestConvertWorkload_BeforeChainIgnoresAlphabeticalOrder(t *testing.T) {
+	// Same chain as above, but named so that alphabetical order contradicts the dependency order:
+	// zulu must complete before alpha, and alpha before main. Sorting by name alone would emit
+	// [alpha, zulu] and Kubernetes would run the chain backwards.
+	var err error
+	state := new(project.State)
+	state, err = state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{"name": "example"},
+		Containers: map[string]scoretypes.Container{
+			"zulu": {
+				Image: "zulu:latest",
+				Before: scoretypes.ContainerBefore{
+					"alpha": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyComplete,
+					},
+				},
+			},
+			"alpha": {
+				Image: "alpha:latest",
+				Before: scoretypes.ContainerBefore{
+					"main": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyComplete,
+					},
+				},
+			},
+			"main": {
+				Image: "my-app:latest",
+			},
+		},
+	}, nil, project.WorkloadExtras{InstanceSuffix: "-test"})
+	require.NoError(t, err)
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+
+	for _, m := range manifests {
+		if dep, ok := m.(*v1.Deployment); ok {
+			assert.Equal(t, []string{"zulu", "alpha"}, initContainerNames(dep), "dependency order must win over alphabetical order")
+			return
+		}
+	}
+	t.Fatal("no Deployment found in manifests")
+}
+
+func TestConvertWorkload_BeforeChainWithSidecar(t *testing.T) {
+	// A sidecar in the middle of a chain: proxy (ready: started) must be up before migrate runs,
+	// and migrate must complete before app starts. The sidecar keeps its restartPolicy while
+	// still being ordered ahead of the init container that depends on it.
+	var err error
+	state := new(project.State)
+	state, err = state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{"name": "example"},
+		Containers: map[string]scoretypes.Container{
+			"proxy": {
+				Image: "proxy:latest",
+				Before: scoretypes.ContainerBefore{
+					"migrate": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyStarted,
+					},
+				},
+			},
+			"migrate": {
+				Image:   "my-app:latest",
+				Command: []string{"migrate"},
+				Before: scoretypes.ContainerBefore{
+					"app": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyComplete,
+					},
+				},
+			},
+			"app": {
+				Image: "my-app:latest",
+			},
+		},
+	}, nil, project.WorkloadExtras{InstanceSuffix: "-test"})
+	require.NoError(t, err)
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+
+	for _, m := range manifests {
+		if dep, ok := m.(*v1.Deployment); ok {
+			require.Equal(t, []string{"proxy", "migrate"}, initContainerNames(dep))
+			require.NotNil(t, dep.Spec.Template.Spec.InitContainers[0].RestartPolicy, "proxy should have restartPolicy")
+			assert.Equal(t, coreV1.ContainerRestartPolicyAlways, *dep.Spec.Template.Spec.InitContainers[0].RestartPolicy)
+			assert.Nil(t, dep.Spec.Template.Spec.InitContainers[1].RestartPolicy, "migrate should not have restartPolicy")
+
+			assert.Len(t, dep.Spec.Template.Spec.Containers, 1, "expected 1 regular container")
+			assert.Equal(t, "app", dep.Spec.Template.Spec.Containers[0].Name)
+			return
+		}
+	}
+	t.Fatal("no Deployment found in manifests")
+}
+
+func TestConvertWorkload_BeforeIndependentInitsStayAlphabetical(t *testing.T) {
+	// Two init containers with no ordering constraint between them: the output must stay
+	// deterministic, so they keep the alphabetical order used elsewhere in the conversion.
+	var err error
+	state := new(project.State)
+	state, err = state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{"name": "example"},
+		Containers: map[string]scoretypes.Container{
+			"seed": {
+				Image: "seed:latest",
+				Before: scoretypes.ContainerBefore{
+					"app": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyComplete,
+					},
+				},
+			},
+			"migrate": {
+				Image: "migrate:latest",
+				Before: scoretypes.ContainerBefore{
+					"app": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyComplete,
+					},
+				},
+			},
+			"app": {
+				Image: "my-app:latest",
+			},
+		},
+	}, nil, project.WorkloadExtras{InstanceSuffix: "-test"})
+	require.NoError(t, err)
+
+	for i := 0; i < 5; i++ {
+		manifests, err := ConvertWorkload(state, "example")
+		require.NoError(t, err)
+		for _, m := range manifests {
+			if dep, ok := m.(*v1.Deployment); ok {
+				require.Equal(t, []string{"migrate", "seed"}, initContainerNames(dep), "unordered init containers must be emitted deterministically")
+			}
+		}
+	}
+}
+
+// initContainerNames returns the init container names of a deployment in manifest order.
+func initContainerNames(dep *v1.Deployment) []string {
+	names := make([]string, 0, len(dep.Spec.Template.Spec.InitContainers))
+	for _, c := range dep.Spec.Template.Spec.InitContainers {
+		names = append(names, c.Name)
+	}
+	return names
+}
