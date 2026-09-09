@@ -122,7 +122,12 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 					if kind != WorkloadKindStatefulSet {
 						return nil, errors.Wrapf(err, "containers.%s.volumes.%s: volume claims can only be set on stateful sets", containerName, target)
 					}
-					volumeClaimTemplates = append(volumeClaimTemplates, *claim)
+					// Claim names follow the same identity as volume names, so a claim-backed volume
+					// mounted by several containers resolves to one template that must be emitted once.
+					volumeClaimTemplates, err = appendVolumeClaimTemplates(volumeClaimTemplates, *claim)
+					if err != nil {
+						return nil, errors.Wrapf(err, "containers.%s.volumes.%s", containerName, target)
+					}
 				} else if vol != nil {
 					containerVolumes = append(containerVolumes, *vol)
 				}
@@ -297,7 +302,7 @@ func ConvertWorkload(state *project.State, workloadName string) ([]machineryMeta
 
 // appendPodVolumes adds the given container-level volumes to the pod-level volume list,
 // collapsing volumes that are shared across containers. Volume names are deterministic
-// (derived from the mount target or resource), so a volume mounted by multiple containers
+// (derived from the identity of the volume source), so a volume mounted by multiple containers
 // yields the same name each time; it must be emitted only once. A name that maps to two
 // genuinely different volume definitions is a conflict and returns an error.
 func appendPodVolumes(volumes []coreV1.Volume, additions []coreV1.Volume) ([]coreV1.Volume, error) {
@@ -311,6 +316,21 @@ func appendPodVolumes(volumes []coreV1.Volume, additions []coreV1.Volume) ([]cor
 		volumes = append(volumes, add)
 	}
 	return volumes, nil
+}
+
+// appendVolumeClaimTemplates adds a persistent volume claim template to the stateful set's list,
+// skipping it when the same claim has already been added by another container. Claim names carry
+// the identity of the volume source, so several containers mounting one claim-backed volume produce
+// the same template repeatedly and Kubernetes rejects a stateful set that lists it more than once.
+// Two different specs under one name are a genuine conflict and return an error.
+func appendVolumeClaimTemplates(claims []coreV1.PersistentVolumeClaim, add coreV1.PersistentVolumeClaim) ([]coreV1.PersistentVolumeClaim, error) {
+	if i := slices.IndexFunc(claims, func(c coreV1.PersistentVolumeClaim) bool { return c.Name == add.Name }); i >= 0 {
+		if !reflect.DeepEqual(claims[i], add) {
+			return nil, errors.Errorf("volume claim '%s' is mounted by multiple containers with conflicting definitions", add.Name)
+		}
+		return claims, nil
+	}
+	return append(claims, add), nil
 }
 
 func WorkloadServiceName(workloadName string, specMetadata map[string]interface{}) string {
