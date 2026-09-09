@@ -630,44 +630,56 @@ func TestConvertWorkload_BeforeChainWithSidecar(t *testing.T) {
 }
 
 func TestConvertWorkload_BeforeIndependentInitsStayAlphabetical(t *testing.T) {
-	// Two init containers with no ordering constraint between them: the output must stay
-	// deterministic, so they keep the alphabetical order used elsewhere in the conversion.
-	var err error
-	state := new(project.State)
-	state, err = state.WithWorkload(&scoretypes.Workload{
-		Metadata: map[string]interface{}{"name": "example"},
-		Containers: map[string]scoretypes.Container{
-			"seed": {
-				Image: "seed:latest",
-				Before: scoretypes.ContainerBefore{
-					"app": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyComplete,
-					},
-				},
-			},
-			"migrate": {
-				Image: "migrate:latest",
-				Before: scoretypes.ContainerBefore{
-					"app": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyComplete,
-					},
-				},
-			},
-			"app": {
-				Image: "my-app:latest",
-			},
-		},
-	}, nil, project.WorkloadExtras{InstanceSuffix: "-test"})
-	require.NoError(t, err)
+	// Init containers with no ordering constraint between them must still be emitted in a stable
+	// order, so that re-running generate on an unchanged Score file produces identical manifests.
+	//
+	// The workload is rebuilt from scratch on every iteration rather than converted repeatedly,
+	// so the container map itself is constructed afresh each time and Go's randomised map
+	// iteration gets a real chance to leak into the output. The names are inserted in reverse
+	// alphabetical order and there are enough of them that ordering by anything other than the
+	// container name would show up: with 12 init containers, landing on the sorted order by
+	// chance is roughly 1 in 12!.
+	names := []string{
+		"zulu", "yankee", "xray", "whiskey", "victor", "uniform",
+		"tango", "sierra", "romeo", "quebec", "papa", "oscar",
+	}
+	expected := []string{
+		"oscar", "papa", "quebec", "romeo", "sierra", "tango",
+		"uniform", "victor", "whiskey", "xray", "yankee", "zulu",
+	}
 
-	for i := 0; i < 5; i++ {
-		manifests, err := ConvertWorkload(state, "example")
-		require.NoError(t, err)
-		for _, m := range manifests {
-			if dep, ok := m.(*v1.Deployment); ok {
-				require.Equal(t, []string{"migrate", "seed"}, initContainerNames(dep), "unordered init containers must be emitted deterministically")
+	for i := 0; i < 50; i++ {
+		containers := map[string]scoretypes.Container{"app": {Image: "my-app:latest"}}
+		for _, name := range names {
+			containers[name] = scoretypes.Container{
+				Image: name + ":latest",
+				Before: scoretypes.ContainerBefore{
+					"app": scoretypes.ContainerBeforeEntry{
+						Ready: scoretypes.ContainerBeforeReadyComplete,
+					},
+				},
 			}
 		}
+
+		state := new(project.State)
+		state, err := state.WithWorkload(&scoretypes.Workload{
+			Metadata:   map[string]interface{}{"name": "example"},
+			Containers: containers,
+		}, nil, project.WorkloadExtras{InstanceSuffix: "-test"})
+		require.NoError(t, err)
+
+		manifests, err := ConvertWorkload(state, "example")
+		require.NoError(t, err)
+
+		var seen bool
+		for _, m := range manifests {
+			if dep, ok := m.(*v1.Deployment); ok {
+				seen = true
+				require.Equal(t, expected, initContainerNames(dep), "unordered init containers must be emitted deterministically (iteration %d)", i)
+				require.Len(t, dep.Spec.Template.Spec.Containers, 1, "expected 1 regular container")
+			}
+		}
+		require.True(t, seen, "no Deployment found in manifests")
 	}
 }
 
