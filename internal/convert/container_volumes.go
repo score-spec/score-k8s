@@ -36,18 +36,23 @@ func convertContainerVolume(
 	resources map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras],
 	substitutionFunc func(string) (string, error),
 ) (coreV1.VolumeMount, *coreV1.Volume, *coreV1.PersistentVolumeClaim, error) {
-	targetHash := sha256.Sum256([]byte(target))
-	volName := fmt.Sprintf("vol-%x", targetHash[:5])
+	resolvedVolumeSource, err := framework.SubstituteString(volume.Source, substitutionFunc)
+	if err != nil {
+		return coreV1.VolumeMount{}, nil, nil, errors.Wrap(err, "source: failed to resolve placeholder")
+	}
+
+	// The volume name identifies the volume itself, so it is derived from the resolved resource uid
+	// rather than from the path a container happens to mount it at. Volumes are pod-level and shared
+	// across containers: the same source mounted by two containers must collapse to one volume no
+	// matter which paths they use, and two different sources must not collide just because they are
+	// mounted at the same path. The mount path stays a per-container property of the mount below.
+	sourceHash := sha256.Sum256([]byte(resolvedVolumeSource))
+	volName := fmt.Sprintf("vol-%x", sourceHash[:5])
 	mount := coreV1.VolumeMount{
 		Name:      volName,
 		MountPath: target,
 		SubPath:   internal.DerefOr(volume.Path, ""),
 		ReadOnly:  internal.DerefOr(volume.ReadOnly, false),
-	}
-
-	resolvedVolumeSource, err := framework.SubstituteString(volume.Source, substitutionFunc)
-	if err != nil {
-		return mount, nil, nil, errors.Wrap(err, "source: failed to resolve placeholder")
 	}
 
 	res, ok := resources[framework.ResourceUid(resolvedVolumeSource)]

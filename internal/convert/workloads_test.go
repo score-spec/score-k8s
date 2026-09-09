@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/apps/v1"
+	coreV1 "k8s.io/api/core/v1"
+	machineryMeta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/score-spec/score-k8s/internal"
@@ -230,7 +232,7 @@ spec:
             cpu: 999m
         volumeMounts:
         - mountPath: /mount/thing
-          name: vol-5e3859fe72
+          name: vol-75c4252512
         - mountPath: /
           name: proj-vol-0
           readOnly: true
@@ -239,7 +241,7 @@ spec:
         resources: {}
       volumes:
       - emptyDir: {}
-        name: vol-5e3859fe72
+        name: vol-75c4252512
       - name: proj-vol-0
         projected:
           sources:
@@ -317,5 +319,228 @@ func TestSharedVolumeAcrossContainers(t *testing.T) {
 	for _, c := range deployment.Spec.Template.Spec.Containers {
 		require.Len(t, c.VolumeMounts, 1)
 		assert.Contains(t, names, c.VolumeMounts[0].Name)
+	}
+}
+
+// buildVolumeWorkloadState builds a workload state with a `vol` resource per entry in resourceNames,
+// each backed by an emptyDir, so the volume identity tests below can stay focused on the mounts.
+func buildVolumeWorkloadState(t *testing.T, containers map[string]scoretypes.Container, resourceNames ...string) *project.State {
+	t.Helper()
+	resources := make(map[string]scoretypes.Resource, len(resourceNames))
+	for _, name := range resourceNames {
+		resources[name] = scoretypes.Resource{Type: "vol", Class: internal.Ref("default")}
+	}
+	state := new(project.State)
+	state, err := state.WithWorkload(&scoretypes.Workload{
+		Metadata:   map[string]interface{}{"name": "example"},
+		Containers: containers,
+		Resources:  resources,
+	}, nil, project.WorkloadExtras{})
+	require.NoError(t, err)
+
+	state.Resources = map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{}
+	for _, name := range resourceNames {
+		state.Resources[framework.ResourceUid("vol.default#example."+name)] = framework.ScoreResourceState[project.ResourceExtras]{
+			Type:  "vol",
+			Class: "default",
+			Outputs: map[string]interface{}{
+				"source": map[string]interface{}{"emptyDir": map[string]interface{}{}},
+			},
+		}
+	}
+	return state
+}
+
+func deploymentFrom(t *testing.T, manifests []machineryMeta.Object) *v1.Deployment {
+	t.Helper()
+	for _, m := range manifests {
+		if d, ok := m.(*v1.Deployment); ok {
+			return d
+		}
+	}
+	t.Fatal("no Deployment found in manifests")
+	return nil
+}
+
+// TestSharedVolumeAcrossDifferentMountPaths covers the shared-emptydir-diff-mountpoint case from
+// https://github.com/score-spec/score-k8s/issues/367: one volume resource mounted by two containers
+// at two different paths is a single shared volume, not two independent ones. Volume names used to
+// be derived from the mount path, so the two paths produced two separate emptyDirs.
+func TestSharedVolumeAcrossDifferentMountPaths(t *testing.T) {
+	state := buildVolumeWorkloadState(t, map[string]scoretypes.Container{
+		"main": {
+			Image:   "busybox",
+			Volumes: map[string]scoretypes.ContainerVolume{"/one": {Source: "${resources.data}"}},
+		},
+		"sidecar": {
+			Image:   "busybox",
+			Volumes: map[string]scoretypes.ContainerVolume{"/two": {Source: "${resources.data}"}},
+		},
+	}, "data")
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+	deployment := deploymentFrom(t, manifests)
+
+	volumes := deployment.Spec.Template.Spec.Volumes
+	require.Len(t, volumes, 1, "one source mounted at two paths must be a single pod-level volume")
+
+	// Both containers mount that one volume, each keeping its own mount path.
+	mountPaths := map[string]string{}
+	for _, c := range deployment.Spec.Template.Spec.Containers {
+		require.Len(t, c.VolumeMounts, 1)
+		assert.Equal(t, volumes[0].Name, c.VolumeMounts[0].Name, "both containers must reference the shared volume")
+		mountPaths[c.Name] = c.VolumeMounts[0].MountPath
+	}
+	assert.Equal(t, map[string]string{"main": "/one", "sidecar": "/two"}, mountPaths)
+}
+
+// TestDistinctVolumesAtSameMountPath covers the diff-emptydir-same-mountpoint case from the same
+// issue: two different volume resources mounted at the same path in two containers are two distinct
+// volumes. Deriving the name from the mount path silently collapsed them into one, so a container
+// ended up reading a volume it never asked for.
+func TestDistinctVolumesAtSameMountPath(t *testing.T) {
+	state := buildVolumeWorkloadState(t, map[string]scoretypes.Container{
+		"main": {
+			Image:   "busybox",
+			Volumes: map[string]scoretypes.ContainerVolume{"/data": {Source: "${resources.vol-01}"}},
+		},
+		"sidecar": {
+			Image:   "busybox",
+			Volumes: map[string]scoretypes.ContainerVolume{"/data": {Source: "${resources.vol-02}"}},
+		},
+	}, "vol-01", "vol-02")
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+	deployment := deploymentFrom(t, manifests)
+
+	require.Len(t, deployment.Spec.Template.Spec.Volumes, 2, "two different sources must stay two volumes")
+
+	mounted := map[string]string{}
+	for _, c := range deployment.Spec.Template.Spec.Containers {
+		require.Len(t, c.VolumeMounts, 1)
+		assert.Equal(t, "/data", c.VolumeMounts[0].MountPath)
+		mounted[c.Name] = c.VolumeMounts[0].Name
+	}
+	assert.NotEqual(t, mounted["main"], mounted["sidecar"], "distinct sources must not share a volume name")
+
+	names := []string{deployment.Spec.Template.Spec.Volumes[0].Name, deployment.Spec.Template.Spec.Volumes[1].Name}
+	assert.Contains(t, names, mounted["main"])
+	assert.Contains(t, names, mounted["sidecar"])
+}
+
+// TestSharedVolumeKeepsPerContainerMountOptions checks that collapsing to one pod-level volume does
+// not flatten the mount options: subPath and readOnly belong to the mount, not to the volume.
+func TestSharedVolumeKeepsPerContainerMountOptions(t *testing.T) {
+	state := buildVolumeWorkloadState(t, map[string]scoretypes.Container{
+		"writer": {
+			Image: "busybox",
+			Volumes: map[string]scoretypes.ContainerVolume{
+				"/data": {Source: "${resources.data}", Path: internal.Ref("in")},
+			},
+		},
+		"reader": {
+			Image: "busybox",
+			Volumes: map[string]scoretypes.ContainerVolume{
+				"/data": {Source: "${resources.data}", Path: internal.Ref("out"), ReadOnly: internal.Ref(true)},
+			},
+		},
+	}, "data")
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+	deployment := deploymentFrom(t, manifests)
+
+	require.Len(t, deployment.Spec.Template.Spec.Volumes, 1, "the same source must collapse to one volume")
+
+	mounts := map[string]coreV1.VolumeMount{}
+	for _, c := range deployment.Spec.Template.Spec.Containers {
+		require.Len(t, c.VolumeMounts, 1)
+		mounts[c.Name] = c.VolumeMounts[0]
+	}
+	assert.Equal(t, "in", mounts["writer"].SubPath)
+	assert.False(t, mounts["writer"].ReadOnly)
+	assert.Equal(t, "out", mounts["reader"].SubPath)
+	assert.True(t, mounts["reader"].ReadOnly, "readOnly must stay per container")
+	assert.Equal(t, mounts["writer"].Name, mounts["reader"].Name)
+}
+
+// TestSharedVolumeMountedTwiceInOneContainer checks the single container variant: mounting one
+// source at two paths inside the same container is legal, and must still yield one pod volume.
+func TestSharedVolumeMountedTwiceInOneContainer(t *testing.T) {
+	state := buildVolumeWorkloadState(t, map[string]scoretypes.Container{
+		"main": {
+			Image: "busybox",
+			Volumes: map[string]scoretypes.ContainerVolume{
+				"/one": {Source: "${resources.data}"},
+				"/two": {Source: "${resources.data}"},
+			},
+		},
+	}, "data")
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+	deployment := deploymentFrom(t, manifests)
+
+	require.Len(t, deployment.Spec.Template.Spec.Volumes, 1, "one source is one pod volume even when mounted twice")
+	require.Len(t, deployment.Spec.Template.Spec.Containers, 1)
+	mounts := deployment.Spec.Template.Spec.Containers[0].VolumeMounts
+	require.Len(t, mounts, 2, "the container keeps both mount points")
+	assert.Equal(t, mounts[0].Name, mounts[1].Name)
+	assert.ElementsMatch(t, []string{"/one", "/two"}, []string{mounts[0].MountPath, mounts[1].MountPath})
+}
+
+// TestSharedVolumeClaimAcrossContainers is the claim-backed counterpart: now that claim names follow
+// the volume source rather than the mount path, two containers mounting one claim produce the same
+// template twice, and a stateful set listing a claim template twice is rejected by Kubernetes.
+func TestSharedVolumeClaimAcrossContainers(t *testing.T) {
+	state := new(project.State)
+	state, err := state.WithWorkload(&scoretypes.Workload{
+		Metadata: map[string]interface{}{
+			"name":        "example",
+			"annotations": map[string]interface{}{internal.WorkloadKindAnnotation: WorkloadKindStatefulSet},
+		},
+		Containers: map[string]scoretypes.Container{
+			"main": {
+				Image:   "busybox",
+				Volumes: map[string]scoretypes.ContainerVolume{"/one": {Source: "${resources.data}"}},
+			},
+			"sidecar": {
+				Image:   "busybox",
+				Volumes: map[string]scoretypes.ContainerVolume{"/two": {Source: "${resources.data}"}},
+			},
+		},
+		Resources: map[string]scoretypes.Resource{
+			"data": {Type: "vol", Class: internal.Ref("default")},
+		},
+	}, nil, project.WorkloadExtras{})
+	require.NoError(t, err)
+	state.Resources = map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
+		"vol.default#example.data": {
+			Type:  "vol",
+			Class: "default",
+			Outputs: map[string]interface{}{
+				"claimSpec": map[string]interface{}{"storageClassName": "default"},
+			},
+		},
+	}
+
+	manifests, err := ConvertWorkload(state, "example")
+	require.NoError(t, err)
+
+	var statefulSet *v1.StatefulSet
+	for _, m := range manifests {
+		if s, ok := m.(*v1.StatefulSet); ok {
+			statefulSet = s
+		}
+	}
+	require.NotNil(t, statefulSet)
+
+	require.Len(t, statefulSet.Spec.VolumeClaimTemplates, 1, "a shared claim must produce a single volume claim template")
+	claimName := statefulSet.Spec.VolumeClaimTemplates[0].Name
+	for _, c := range statefulSet.Spec.Template.Spec.Containers {
+		require.Len(t, c.VolumeMounts, 1)
+		assert.Equal(t, claimName, c.VolumeMounts[0].Name, "both containers must reference the shared claim")
 	}
 }
