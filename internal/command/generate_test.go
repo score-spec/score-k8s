@@ -551,6 +551,217 @@ spec:
 `, sd.State.Workloads["example"].Extras.InstanceSuffix))
 }
 
+func TestGenerate_before_healthy_rejected(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  init:
+    image: my-app:latest
+    before:
+      app:
+        ready: healthy
+  app:
+    image: my-app:latest
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ready 'healthy' is not supported in score-k8s")
+}
+
+func TestGenerate_before_self_reference(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  app:
+    image: my-app:latest
+    before:
+      app:
+        ready: complete
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "self-referencing before entry")
+}
+
+func TestGenerate_before_unknown_container(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  init:
+    image: my-app:latest
+    before:
+      nonexistent:
+        ready: complete
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "refers to unknown container")
+}
+
+func TestGenerate_before_valid_complete(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  migrate:
+    image: my-app:latest
+    command: ["migrate"]
+    before:
+      app:
+        ready: complete
+  app:
+    image: my-app:latest
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	require.NoError(t, err)
+
+	raw, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "initContainers")
+	assert.Contains(t, string(raw), "name: migrate")
+}
+
+func TestGenerate_before_direct_cycle(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	// svc-a must start before svc-b, and svc-b must start before svc-a: there is no valid ordering.
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  svc-a:
+    image: my-app:latest
+    before:
+      svc-b:
+        ready: complete
+  svc-b:
+    image: my-app:latest
+    before:
+      svc-a:
+        ready: complete
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "contain a cycle")
+}
+
+func TestGenerate_before_transitive_cycle(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	// A longer loop, svc-a -> svc-b -> svc-c -> svc-a, which is only caught by walking the graph rather than
+	// by looking at a single before entry in isolation.
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  svc-a:
+    image: my-app:latest
+    before:
+      svc-b:
+        ready: complete
+  svc-b:
+    image: my-app:latest
+    before:
+      svc-c:
+        ready: complete
+  svc-c:
+    image: my-app:latest
+    before:
+      svc-a:
+        ready: started
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "contain a cycle")
+}
+
+func TestGenerate_before_chain_is_not_a_cycle(t *testing.T) {
+	td := changeToTempDir(t)
+	_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	require.NoError(t, err)
+
+	// A diamond: init-a and init-b both run before app, and init-a also runs before init-b.
+	// Nodes get visited more than once here, so this guards against the cycle check mistaking
+	// a re-visited node for a loop.
+	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  init-a:
+    image: my-app:latest
+    before:
+      init-b:
+        ready: complete
+      app:
+        ready: complete
+  init-b:
+    image: my-app:latest
+    before:
+      app:
+        ready: complete
+  app:
+    image: my-app:latest
+`), 0644))
+
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
+		"generate", "-o", "manifests.yaml", "--", "score.yaml",
+	})
+	require.NoError(t, err)
+
+	raw, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
+	require.NoError(t, err)
+	// init-a must be listed ahead of init-b, since Kubernetes runs init containers in list order.
+	assert.Regexp(t, `(?s)initContainers.*name: init-a.*name: init-b`, string(raw))
+}
+
 func TestGenerateWithKyamlFormat(t *testing.T) {
 	td := changeToTempDir(t)
 	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
