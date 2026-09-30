@@ -709,6 +709,7 @@
               k8s.score.dev/resource-uid: {{ .Uid }}
               k8s.score.dev/resource-guid: {{ .Guid }}
           spec:
+            automountServiceAccountToken: false
             containers:
             - name: mysql-db
               image: mirror.gcr.io/mysql:8
@@ -1007,6 +1008,7 @@
               app.kubernetes.io/name: {{ .State.service }}
               app.kubernetes.io/instance: {{ .State.service }}
           spec:
+            automountServiceAccountToken: false
             containers:
               - name: rabbitmq
                 image: mirror.gcr.io/rabbitmq:3-management-alpine
@@ -1138,6 +1140,7 @@
               k8s.score.dev/resource-uid: {{ .Uid }}
               k8s.score.dev/resource-guid: {{ .Guid }}
           spec:
+            automountServiceAccountToken: false
             containers:
             - name: mssql-db
               image: mcr.microsoft.com/mssql/server:latest
