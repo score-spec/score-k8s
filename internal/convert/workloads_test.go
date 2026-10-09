@@ -488,13 +488,13 @@ func TestSharedVolumeAcrossContainers(t *testing.T) {
 	}
 }
 
-// buildVolumeWorkloadState builds a workload state with a `vol` resource per entry in resourceNames,
+// buildVolumeWorkloadState builds a workload state with a `volume` resource per entry in resourceNames,
 // each backed by an emptyDir, so the volume identity tests below can stay focused on the mounts.
 func buildVolumeWorkloadState(t *testing.T, containers map[string]scoretypes.Container, resourceNames ...string) *project.State {
 	t.Helper()
 	resources := make(map[string]scoretypes.Resource, len(resourceNames))
 	for _, name := range resourceNames {
-		resources[name] = scoretypes.Resource{Type: "vol", Class: internal.Ref("default")}
+		resources[name] = scoretypes.Resource{Type: "volume", Class: internal.Ref("default")}
 	}
 	state := new(project.State)
 	state, err := state.WithWorkload(&scoretypes.Workload{
@@ -506,8 +506,8 @@ func buildVolumeWorkloadState(t *testing.T, containers map[string]scoretypes.Con
 
 	state.Resources = map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{}
 	for _, name := range resourceNames {
-		state.Resources[framework.ResourceUid("vol.default#example."+name)] = framework.ScoreResourceState[project.ResourceExtras]{
-			Type:  "vol",
+		state.Resources[framework.ResourceUid("volume.default#example."+name)] = framework.ScoreResourceState[project.ResourceExtras]{
+			Type:  "volume",
 			Class: "default",
 			Outputs: map[string]interface{}{
 				"source": map[string]interface{}{"emptyDir": map[string]interface{}{}},
@@ -678,13 +678,13 @@ func TestSharedVolumeClaimAcrossContainers(t *testing.T) {
 			},
 		},
 		Resources: map[string]scoretypes.Resource{
-			"data": {Type: "vol", Class: internal.Ref("default")},
+			"data": {Type: "volume", Class: internal.Ref("default")},
 		},
 	}, nil, project.WorkloadExtras{})
 	require.NoError(t, err)
 	state.Resources = map[framework.ResourceUid]framework.ScoreResourceState[project.ResourceExtras]{
-		"vol.default#example.data": {
-			Type:  "vol",
+		"volume.default#example.data": {
+			Type:  "volume",
 			Class: "default",
 			Outputs: map[string]interface{}{
 				"claimSpec": map[string]interface{}{"storageClassName": "default"},
