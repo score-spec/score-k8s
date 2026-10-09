@@ -108,14 +108,14 @@ func Test_convertContainerVolume_nominal_source(t *testing.T) {
 		},
 	}, noSubstitutesFunction)
 	assert.Equal(t, coreV1.VolumeMount{
-		Name:      "vol-274e5357eb",
+		Name:      "vol-c7571c543f",
 		ReadOnly:  true,
 		MountPath: "/mount/path",
 		SubPath:   "sub",
 	}, mount)
 	if assert.NotNil(t, vol) {
 		assert.Equal(t, coreV1.Volume{
-			Name: "vol-274e5357eb",
+			Name: "vol-c7571c543f",
 			VolumeSource: coreV1.VolumeSource{
 				EmptyDir: &coreV1.EmptyDirVolumeSource{
 					SizeLimit: internal.Ref(resource.MustParse("10Mi")),
@@ -142,7 +142,7 @@ func Test_convertContainerVolume_nominal_claim(t *testing.T) {
 		},
 	}, noSubstitutesFunction)
 	assert.Equal(t, coreV1.VolumeMount{
-		Name:      "vol-274e5357eb",
+		Name:      "vol-c7571c543f",
 		ReadOnly:  true,
 		MountPath: "/mount/path",
 		SubPath:   "sub",
@@ -151,7 +151,7 @@ func Test_convertContainerVolume_nominal_claim(t *testing.T) {
 	if assert.NotNil(t, claim) {
 		assert.Equal(t, coreV1.PersistentVolumeClaim{
 			ObjectMeta: v1.ObjectMeta{
-				Name: "vol-274e5357eb",
+				Name: "vol-c7571c543f",
 			},
 			Spec: coreV1.PersistentVolumeClaimSpec{
 				StorageClassName: internal.Ref("default"),
