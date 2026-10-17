@@ -271,8 +271,8 @@ func TestConvertWorkload_BeforeComplete(t *testing.T) {
 				Image:   "my-app:latest",
 				Command: []string{"migrate"},
 				Before: scoretypes.ContainerBefore{
-					"app": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyComplete,
+					"app": {
+						Ready: scoretypes.ReadyComplete,
 					},
 				},
 			},
@@ -311,8 +311,8 @@ func TestConvertWorkload_BeforeStarted(t *testing.T) {
 			"sidecar": {
 				Image: "sidecar:latest",
 				Before: scoretypes.ContainerBefore{
-					"app": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyStarted,
+					"app": {
+						Ready: scoretypes.ReadyStarted,
 					},
 				},
 			},
@@ -382,16 +382,16 @@ func TestConvertWorkload_MixedBefore(t *testing.T) {
 				Image:   "my-app:latest",
 				Command: []string{"migrate"},
 				Before: scoretypes.ContainerBefore{
-					"app": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyComplete,
+					"app": {
+						Ready: scoretypes.ReadyComplete,
 					},
 				},
 			},
 			"sidecar": {
 				Image: "sidecar:latest",
 				Before: scoretypes.ContainerBefore{
-					"app": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyStarted,
+					"app": {
+						Ready: scoretypes.ReadyStarted,
 					},
 				},
 			},
@@ -722,16 +722,16 @@ func TestConvertWorkload_BeforeChain(t *testing.T) {
 			"init-a": {
 				Image: "init-a:latest",
 				Before: scoretypes.ContainerBefore{
-					"init-b": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyComplete,
+					"init-b": {
+						Ready: scoretypes.ReadyComplete,
 					},
 				},
 			},
 			"init-b": {
 				Image: "init-b:latest",
 				Before: scoretypes.ContainerBefore{
-					"main": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyComplete,
+					"main": {
+						Ready: scoretypes.ReadyComplete,
 					},
 				},
 			},
@@ -770,16 +770,16 @@ func TestConvertWorkload_BeforeChainIgnoresAlphabeticalOrder(t *testing.T) {
 			"zulu": {
 				Image: "zulu:latest",
 				Before: scoretypes.ContainerBefore{
-					"alpha": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyComplete,
+					"alpha": {
+						Ready: scoretypes.ReadyComplete,
 					},
 				},
 			},
 			"alpha": {
 				Image: "alpha:latest",
 				Before: scoretypes.ContainerBefore{
-					"main": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyComplete,
+					"main": {
+						Ready: scoretypes.ReadyComplete,
 					},
 				},
 			},
@@ -814,8 +814,8 @@ func TestConvertWorkload_BeforeChainWithSidecar(t *testing.T) {
 			"proxy": {
 				Image: "proxy:latest",
 				Before: scoretypes.ContainerBefore{
-					"migrate": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyStarted,
+					"migrate": {
+						Ready: scoretypes.ReadyStarted,
 					},
 				},
 			},
@@ -823,8 +823,8 @@ func TestConvertWorkload_BeforeChainWithSidecar(t *testing.T) {
 				Image:   "my-app:latest",
 				Command: []string{"migrate"},
 				Before: scoretypes.ContainerBefore{
-					"app": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyComplete,
+					"app": {
+						Ready: scoretypes.ReadyComplete,
 					},
 				},
 			},
@@ -878,8 +878,8 @@ func TestConvertWorkload_BeforeIndependentInitsStayAlphabetical(t *testing.T) {
 			containers[name] = scoretypes.Container{
 				Image: name + ":latest",
 				Before: scoretypes.ContainerBefore{
-					"app": scoretypes.ContainerBeforeEntry{
-						Ready: scoretypes.ContainerBeforeReadyComplete,
+					"app": {
+						Ready: scoretypes.ReadyComplete,
 					},
 				},
 			}

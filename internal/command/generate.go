@@ -450,7 +450,7 @@ func validateContainerBefore(workload *scoretypes.Workload) error {
 				errMsgs = append(errMsgs, fmt.Sprintf("container %q before refers to unknown container %q", containerName, dep))
 				continue
 			}
-			if entry.Ready == scoretypes.ContainerBeforeReadyHealthy {
+			if entry.Ready == scoretypes.ReadyHealthy {
 				errMsgs = append(errMsgs, fmt.Sprintf("container %q before %q: ready 'healthy' is not supported in score-k8s, Kubernetes initContainers don't support health-based gating", containerName, dep))
 				continue
 			}
