@@ -406,9 +406,9 @@ func classifyContainer(c scoretypes.Container) containerClass {
 	hasStarted := false
 	for _, entry := range c.Before {
 		switch entry.Ready {
-		case scoretypes.ContainerBeforeReadyStarted:
+		case scoretypes.ReadyStarted:
 			hasStarted = true
-		case scoretypes.ContainerBeforeReadyComplete:
+		case scoretypes.ReadyComplete:
 			// init container
 		}
 	}
