@@ -85,11 +85,11 @@ Available Commands:
   zsh         Generate the autocompletion script for zsh
 
 Flags:
-  -h, --help   help for completion
+  -h, --help[=true|false]   help for completion
 
 Global Flags:
-      --quiet           Mute any logging output
-  -v, --verbose count   Increase log verbosity and detail by specifying this flag one or more times
+      --quiet[=true|false]   Mute any logging output
+  -v, --verbose count        Increase log verbosity and detail by specifying this flag one or more times
 
 Use "score-k8s completion [command] --help" for more information about a command.
 `, stdout)
@@ -129,12 +129,12 @@ Usage:
   score-k8s completion bash
 
 Flags:
-  -h, --help              help for bash
-      --no-descriptions   disable completion descriptions
+  -h, --help[=true|false]              help for bash
+      --no-descriptions[=true|false]   disable completion descriptions
 
 Global Flags:
-      --quiet           Mute any logging output
-  -v, --verbose count   Increase log verbosity and detail by specifying this flag one or more times
+      --quiet[=true|false]   Mute any logging output
+  -v, --verbose count        Increase log verbosity and detail by specifying this flag one or more times
 `, stdout)
 	assert.Equal(t, "", stderr)
 }
@@ -165,12 +165,12 @@ Usage:
   score-k8s completion fish [flags]
 
 Flags:
-  -h, --help              help for fish
-      --no-descriptions   disable completion descriptions
+  -h, --help[=true|false]              help for fish
+      --no-descriptions[=true|false]   disable completion descriptions
 
 Global Flags:
-      --quiet           Mute any logging output
-  -v, --verbose count   Increase log verbosity and detail by specifying this flag one or more times
+      --quiet[=true|false]   Mute any logging output
+  -v, --verbose count        Increase log verbosity and detail by specifying this flag one or more times
 `, stdout)
 	assert.Equal(t, "", stderr)
 }
@@ -212,12 +212,12 @@ Usage:
   score-k8s completion zsh [flags]
 
 Flags:
-  -h, --help              help for zsh
-      --no-descriptions   disable completion descriptions
+  -h, --help[=true|false]              help for zsh
+      --no-descriptions[=true|false]   disable completion descriptions
 
 Global Flags:
-      --quiet           Mute any logging output
-  -v, --verbose count   Increase log verbosity and detail by specifying this flag one or more times
+      --quiet[=true|false]   Mute any logging output
+  -v, --verbose count        Increase log verbosity and detail by specifying this flag one or more times
 `, stdout)
 	assert.Equal(t, "", stderr)
 }
@@ -245,12 +245,12 @@ Usage:
   score-k8s completion powershell [flags]
 
 Flags:
-  -h, --help              help for powershell
-      --no-descriptions   disable completion descriptions
+  -h, --help[=true|false]              help for powershell
+      --no-descriptions[=true|false]   disable completion descriptions
 
 Global Flags:
-      --quiet           Mute any logging output
-  -v, --verbose count   Increase log verbosity and detail by specifying this flag one or more times
+      --quiet[=true|false]   Mute any logging output
+  -v, --verbose count        Increase log verbosity and detail by specifying this flag one or more times
 `, stdout)
 	assert.Equal(t, "", stderr)
 }
